@@ -39,7 +39,7 @@ export default function MovieCard({
           type="button"
           onClick={onDelete}
           aria-label="Delete movie"
-          className="absolute right-3 top-3 z-10 inline-flex items-center justify-center rounded-lg bg-white/90 p-2 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white dark:bg-black/60 dark:text-zinc-200 dark:ring-zinc-800"
+          className="absolute right-3 top-3 z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-white/90 p-3 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white dark:bg-black/60 dark:text-zinc-200 dark:ring-zinc-800"
         >
           <svg
             width="16"

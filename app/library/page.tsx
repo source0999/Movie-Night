@@ -101,7 +101,9 @@ export default function LibraryPage() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">My Library</h1>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              My Library
+            </h1>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Save movies locally for your movie night.
             </p>
@@ -139,7 +141,7 @@ export default function LibraryPage() {
               Nothing saved in {categoryLabels[activeCategory]} yet.
             </div>
           ) : (
-            <div className="mt-2 grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              <div className="mt-2 grid gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {movies.map((movie: LibraryMovie) => {
                 const year = releaseYear(movie.release_date);
                 const posterSrc = movie.poster_path
@@ -234,7 +236,7 @@ export default function LibraryPage() {
                           type="button"
                           onClick={() => requestDelete(movie.id)}
                           aria-label="Delete movie"
-                          className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white p-2 text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
+                          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-zinc-200 bg-white p-3 text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
                         >
                           <svg
                             width="18"

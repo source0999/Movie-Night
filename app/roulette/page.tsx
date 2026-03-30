@@ -33,7 +33,9 @@ export default function RoulettePage() {
     <div className="min-h-screen bg-zinc-50 py-10 text-zinc-900 dark:bg-black dark:text-zinc-50">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <header className="mb-6">
-          <h1 className="text-3xl font-semibold tracking-tight">Roulette</h1>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Roulette
+          </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             {instruction}
           </p>
@@ -49,7 +51,7 @@ export default function RoulettePage() {
             </p>
             <Link
               href="/"
-              className="mt-4 inline-flex rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
+              className="mt-4 inline-flex min-h-[44px] rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
             >
               Go add some movies!
             </Link>

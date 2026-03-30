@@ -95,7 +95,7 @@ export default function MovieDetailsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
     >
@@ -105,7 +105,7 @@ export default function MovieDetailsModal({
         aria-label="Close modal"
       />
 
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-white text-zinc-900 shadow-xl dark:bg-black dark:text-zinc-50">
+      <div className="relative w-full max-w-[95vw] overflow-y-auto rounded-2xl bg-white text-zinc-900 shadow-xl dark:bg-black dark:text-zinc-50 max-h-[95vh] sm:max-w-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-200 p-4 dark:border-zinc-800">
           <div>
             <h2 className="text-lg font-semibold leading-6">
@@ -123,7 +123,7 @@ export default function MovieDetailsModal({
 
           <button
             onClick={onClose}
-            className="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
+            className="min-h-[44px] rounded-md border border-zinc-200 px-4 py-3 text-sm hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
             aria-label="Close"
           >
             Close

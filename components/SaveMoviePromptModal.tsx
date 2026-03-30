@@ -118,7 +118,7 @@ export default function SaveMoviePromptModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
     >
@@ -128,7 +128,7 @@ export default function SaveMoviePromptModal({
         aria-label="Close"
       />
 
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white p-4 text-zinc-900 shadow-xl dark:bg-black dark:text-zinc-50">
+      <div className="relative w-full max-w-[95vw] overflow-y-auto rounded-2xl bg-white p-4 text-zinc-900 shadow-xl dark:bg-black dark:text-zinc-50 max-h-[95vh] sm:max-w-lg">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-200 pb-3 dark:border-zinc-800">
           <div>
             <h2 className="text-lg font-semibold">Save movie</h2>
@@ -140,7 +140,7 @@ export default function SaveMoviePromptModal({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-md border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
+            className="min-h-[44px] rounded-md border border-zinc-200 px-4 py-3 text-sm hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
           >
             Close
           </button>
@@ -204,13 +204,13 @@ export default function SaveMoviePromptModal({
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-50 dark:hover:bg-zinc-800"
+              className="min-h-[44px] rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-50 dark:hover:bg-zinc-800"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
+              className="min-h-[44px] rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
             >
               Save
             </button>

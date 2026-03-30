@@ -180,25 +180,27 @@ export default function Home() {
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Movie Night</h1>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              Movie Night
+            </h1>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Search TMDB and pick something for tonight.
             </p>
           </div>
 
           <div className="w-full sm:max-w-md">
-            <form onSubmit={onSearch} className="flex gap-2">
+            <form onSubmit={onSearch} className="flex w-full gap-2">
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search movies (e.g. Inception)"
-                className="flex-1 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm outline-none transition focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:ring-zinc-800"
+                className="min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:ring-zinc-800"
                 aria-label="Search movies"
               />
               <button
                 type="submit"
                 disabled={!hasQuery || loading}
-                className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
+                className="min-h-[44px] shrink-0 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
               >
                 {loading ? "Loading..." : "Search"}
               </button>
@@ -245,7 +247,7 @@ export default function Home() {
           ) : null}
 
           {!loading ? (
-            <div className="mt-6 grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-6 grid gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               <AnimatePresence initial={false}>
                 {movies.map((movie, idx) => {
                 const year = releaseYear(movie.release_date);
@@ -302,7 +304,7 @@ export default function Home() {
                               setSelectedMovieId(movie.id);
                               setDetailsOpen(true);
                             }}
-                            className="whitespace-nowrap rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
+                            className="min-h-[44px] whitespace-nowrap rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
                           >
                             Details
                           </button>
@@ -348,7 +350,7 @@ export default function Home() {
               No movies in Watched yet.
             </div>
           ) : (
-            <div className="mt-6 grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-6 grid gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               <AnimatePresence initial={false}>
                 {library.watched
                   .slice()
@@ -388,7 +390,7 @@ export default function Home() {
                           requestDelete(movie.id);
                         }}
                         aria-label="Delete movie"
-                        className="absolute right-3 top-3 z-10 inline-flex items-center justify-center rounded-lg bg-white/90 p-2 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white dark:bg-black/60 dark:text-zinc-200 dark:ring-zinc-800"
+                      className="absolute right-3 top-3 z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-white/90 p-3 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white dark:bg-black/60 dark:text-zinc-200 dark:ring-zinc-800"
                       >
                         <svg
                           width="16"
@@ -494,7 +496,7 @@ export default function Home() {
               Nothing in your Watchlist yet.
             </div>
           ) : (
-            <div className="mt-6 grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-6 grid gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {library.watchlist
                 .slice()
                 .reverse()
@@ -517,7 +519,7 @@ export default function Home() {
                         type="button"
                         onClick={() => requestDelete(movie.id)}
                         aria-label="Delete movie"
-                        className="absolute right-3 top-3 z-10 inline-flex items-center justify-center rounded-lg bg-white/90 p-2 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white dark:bg-black/60 dark:text-zinc-200 dark:ring-zinc-800"
+                      className="absolute right-3 top-3 z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-white/90 p-3 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white dark:bg-black/60 dark:text-zinc-200 dark:ring-zinc-800"
                       >
                         <svg
                           width="18"
