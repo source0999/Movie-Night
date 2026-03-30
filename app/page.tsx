@@ -30,8 +30,12 @@ function isMissingApiKeyError(message: string | null) {
   if (!message) return false;
   const lower = message.toLowerCase();
   return (
+    lower.includes("tmdb auth is missing") ||
     lower.includes("tmdb api key is missing") ||
-    lower.includes("tmdb read access token is missing")
+    lower.includes("tmdb read access token is missing") ||
+    lower.includes("invalid api key") ||
+    lower.includes("\"status_code\": 7") ||
+    lower.includes("\"status_code\":7")
   );
 }
 
@@ -200,15 +204,30 @@ export default function Home() {
               </button>
             </form>
             {error ? (
-              <p
-                className={`mt-2 text-sm ${
+              <div
+                className={`mt-2 rounded-2xl border p-3 text-sm ${
                   isMissingApiKeyError(error)
-                    ? "text-amber-700 dark:text-amber-300"
-                    : "text-red-600 dark:text-red-400"
+                    ? "border-amber-200/70 bg-amber-50/5 text-amber-200 dark:border-amber-800/70 dark:bg-amber-950/20"
+                    : "border-red-200/70 bg-red-50/5 text-red-200 dark:border-red-800/70 dark:bg-red-950/20"
                 }`}
               >
-                {error}
-              </p>
+                <div className="flex items-center gap-2 font-semibold">
+                  <span className="inline-block h-2 w-2 rounded-full bg-amber-400 dark:bg-amber-300" />
+                  <span>
+                    TMDB error
+                    {isMissingApiKeyError(error) ? " (auth)" : ""}
+                  </span>
+                </div>
+                <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-current">
+                  {error}
+                </pre>
+                {isMissingApiKeyError(error) ? (
+                  <p className="mt-2 text-xs text-amber-100/80 dark:text-amber-100/70">
+                    Check that <code className="font-mono">NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN</code>{" "}
+                    is a valid TMDB read access token (JWT). Also ensure the GitHub Secret name matches exactly.
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </header>
