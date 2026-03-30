@@ -13,7 +13,7 @@ const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/Movie-Night").replace(
 );
 function withBasePath(href: string) {
   if (!basePath) return href;
-  if (href === "/") return basePath;
+  if (href === "/") return `${basePath}/`;
   return `${basePath}${href}`;
 }
 

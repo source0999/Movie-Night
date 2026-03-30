@@ -111,58 +111,68 @@ export function useMovieLibrary() {
 
     const run = async () => {
       await Promise.resolve();
-      const { db } = initFirebase();
-      dbRef.current = db;
+      try {
+        const { db } = initFirebase();
+        dbRef.current = db;
 
-      const moviesCollectionRef = collection(db, "movies");
+        const moviesCollectionRef = collection(db, "movies");
 
-      const watchlistQ = query(
-        moviesCollectionRef,
-        where("category", "==", "watchlist"),
-      );
-      const watchedQ = query(
-        moviesCollectionRef,
-        where("category", "==", "watched"),
-      );
+        const watchlistQ = query(
+          moviesCollectionRef,
+          where("category", "==", "watchlist"),
+        );
+        const watchedQ = query(
+          moviesCollectionRef,
+          where("category", "==", "watched"),
+        );
 
-      const unsubWatchlist = onSnapshot(
-        watchlistQ,
-        (snap) => {
-          watchlist = snap.docs
-            .map((docSnap) => normalizeMovie(docSnap.data()))
-            .filter((m): m is LibraryMovie => !!m);
-          watchlistLoaded = true;
-          maybeHydrate();
-        },
-        (err) => {
-          console.error("Firestore watchlist listener error", err);
-          watchlist = [];
-          watchlistLoaded = true;
-          maybeHydrate();
-        },
-      );
+        const unsubWatchlist = onSnapshot(
+          watchlistQ,
+          (snap) => {
+            watchlist = snap.docs
+              .map((docSnap) => normalizeMovie(docSnap.data()))
+              .filter((m): m is LibraryMovie => !!m);
+            watchlistLoaded = true;
+            maybeHydrate();
+          },
+          (err) => {
+            console.error("Firestore watchlist listener error", err);
+            watchlist = [];
+            watchlistLoaded = true;
+            maybeHydrate();
+          },
+        );
 
-      const unsubWatched = onSnapshot(
-        watchedQ,
-        (snap) => {
-          watched = snap.docs
-            .map((docSnap) => normalizeMovie(docSnap.data()))
-            .filter((m): m is LibraryMovie => !!m);
-          watchedLoaded = true;
-          maybeHydrate();
-        },
-        (err) => {
-          console.error("Firestore watched listener error", err);
-          watched = [];
-          watchedLoaded = true;
-          maybeHydrate();
-        },
-      );
+        const unsubWatched = onSnapshot(
+          watchedQ,
+          (snap) => {
+            watched = snap.docs
+              .map((docSnap) => normalizeMovie(docSnap.data()))
+              .filter((m): m is LibraryMovie => !!m);
+            watchedLoaded = true;
+            maybeHydrate();
+          },
+          (err) => {
+            console.error("Firestore watched listener error", err);
+            watched = [];
+            watchedLoaded = true;
+            maybeHydrate();
+          },
+        );
 
-      return () => {
-        unsubWatchlist();
-        unsubWatched();
-      };
+        return () => {
+          unsubWatchlist();
+          unsubWatched();
+        };
+      } catch (err) {
+        console.error("Firestore init failed", err);
+        watchlistLoaded = true;
+        watchedLoaded = true;
+        watchlist = [];
+        watched = [];
+        maybeHydrate();
+        return () => {};
+      }
     };
 
     let cleanup: undefined | (() => void);

@@ -7,8 +7,8 @@ import type { MovieNightUser } from "../lib/auth";
 
 const LINKS = [
   { href: "/", label: "Home" },
-  { href: "/library", label: "Library" },
-  { href: "/roulette", label: "Movie Roulette" },
+  { href: "/library/", label: "Library" },
+  { href: "/roulette/", label: "Movie Roulette" },
 ] as const;
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/Movie-Night").replace(
@@ -17,13 +17,14 @@ const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/Movie-Night").replace(
 );
 function withBasePath(href: string) {
   if (!basePath) return href;
-  if (href === "/") return basePath;
+  if (href === "/") return `${basePath}/`;
   return `${basePath}${href}`;
 }
 
 function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
-  return pathname === href;
+  const norm = (p: string) => (p.endsWith("/") ? p.slice(0, -1) : p);
+  if (href === "/") return norm(pathname) === "";
+  return norm(pathname) === norm(href);
 }
 
 export default function TopNav({

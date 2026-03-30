@@ -22,7 +22,8 @@ export const metadata: Metadata = {
   title: "Movie Night",
   description: "Search TMDB and pick a movie for tonight.",
   icons: {
-    icon: "favicon.svg",
+    // Must include basePath so it resolves from sub-pages on GitHub Pages.
+    icon: "/Movie-Night/favicon.svg",
   },
 };
 
