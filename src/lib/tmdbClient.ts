@@ -6,21 +6,34 @@ export type TMDBSearchMovie = {
   overview: string | null;
 };
 
-function getTmdbAccessToken(): string {
-  const token = process.env.NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN;
-  if (!token) {
+type TmdbAuth =
+  | { type: "bearer"; token: string }
+  | { type: "apiKey"; key: string };
+
+function getTmdbAuth(): TmdbAuth {
+  const value = process.env.NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN;
+  if (!value) {
     throw new Error(
-      "TMDB read access token is missing. Add NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN to your environment.",
+      "TMDB auth is missing. Add NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN to your environment.",
     );
   }
-  return token;
+
+  // TMDB “read access token” is JWT-like (three dot-separated parts).
+  const looksLikeJwt =
+    value.includes(".") && value.split(".").length === 3 && value.startsWith("eyJ");
+
+  if (looksLikeJwt) return { type: "bearer", token: value };
+
+  // Fallback: if someone placed the raw API key into the same env var,
+  // use it as the `api_key` query parameter instead of Bearer.
+  return { type: "apiKey", key: value };
 }
 
 export async function tmdbSearchMovies(
   query: string,
   language = "en-US",
 ): Promise<TMDBSearchMovie[]> {
-  const accessToken = getTmdbAccessToken();
+  const tmdbAuth = getTmdbAuth();
 
   const url = new URL(
     "https://api.themoviedb.org/3/search/movie",
@@ -29,12 +42,13 @@ export async function tmdbSearchMovies(
     query,
     include_adult: "false",
     language,
+    ...(tmdbAuth.type === "apiKey" ? { api_key: tmdbAuth.key } : {}),
   }).toString();
 
   const res = await fetch(url.toString(), {
     headers: {
-      Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
+      ...(tmdbAuth.type === "bearer" ? { Authorization: `Bearer ${tmdbAuth.token}` } : {}),
     },
     cache: "no-store",
   });
@@ -83,16 +97,17 @@ export async function tmdbGetMovieDetails(
   poster_path: string | null;
   overview: string | null;
 }> {
-  const accessToken = getTmdbAccessToken();
+  const tmdbAuth = getTmdbAuth();
 
-  const url = `https://api.themoviedb.org/3/movie/${movieId}?${new URLSearchParams(
-    { language },
-  ).toString()}`;
+  const url = `https://api.themoviedb.org/3/movie/${movieId}?${new URLSearchParams({
+    language,
+    ...(tmdbAuth.type === "apiKey" ? { api_key: tmdbAuth.key } : {}),
+  }).toString()}`;
 
   const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
+      ...(tmdbAuth.type === "bearer" ? { Authorization: `Bearer ${tmdbAuth.token}` } : {}),
     },
     cache: "no-store",
   });
