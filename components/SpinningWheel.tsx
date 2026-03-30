@@ -46,6 +46,7 @@ export default function SpinningWheel({
   const [rotationDeg, setRotationDeg] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [activeWinner, setActiveWinner] = useState<LibraryMovie | null>(null);
+  const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
   const [spinDurationMs, setSpinDurationMs] = useState(4000);
 
   const timeoutRef = useRef<number | null>(null);
@@ -104,10 +105,12 @@ export default function SpinningWheel({
 
     setSpinning(true);
     setActiveWinner(null);
+    setWinnerIndex(null);
 
     const winnerIndex = Math.floor(Math.random() * segmentCount);
     const winner = movies[winnerIndex];
     setActiveWinner(winner);
+    setWinnerIndex(winnerIndex);
 
     const extraTurns = 4 + Math.floor(Math.random() * 3); // 4-6 turns
     const durationMs = 3000 + Math.floor(Math.random() * 2000); // 3-5s
@@ -159,9 +162,51 @@ export default function SpinningWheel({
                   floodOpacity="0.25"
                 />
               </filter>
+
+              <linearGradient id="holoMetal" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#6b21a8" stopOpacity="0.75" />
+                <stop offset="35%" stopColor="#22d3ee" stopOpacity="0.65" />
+                <stop offset="70%" stopColor="#a78bfa" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#f0abfc" stopOpacity="0.45" />
+              </linearGradient>
+
+              <linearGradient id="neonRing" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.95" />
+                <stop offset="50%" stopColor="#6b21a8" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.85" />
+              </linearGradient>
+
+              <filter id="ringGlow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow
+                  dx="0"
+                  dy="0"
+                  stdDeviation="6"
+                  floodColor="#22d3ee"
+                  floodOpacity="0.35"
+                />
+                <feDropShadow
+                  dx="0"
+                  dy="0"
+                  stdDeviation="10"
+                  floodColor="#6b21a8"
+                  floodOpacity="0.25"
+                />
+              </filter>
             </defs>
 
             <g filter="url(#shadow)">
+              {/* Outer neon metallic ring */}
+              <circle
+                cx={cx}
+                cy={cy}
+                r={outerRadius * 1.07}
+                fill="none"
+                stroke="url(#neonRing)"
+                strokeWidth={10}
+                filter="url(#ringGlow)"
+                opacity={spinning ? 0.95 : 0.8}
+              />
+
               {movies.map((movie, i) => {
                 const startAngle = -90 + i * anglePerSegment;
                 const endAngle = startAngle + anglePerSegment;
@@ -217,6 +262,9 @@ export default function SpinningWheel({
                       stroke="rgba(0,0,0,0.08)"
                       strokeWidth="1"
                     />
+                    {/* Holographic overlay to add metallic texture */}
+                    <path d={d} fill="url(#holoMetal)" opacity="0.35" style={{ mixBlendMode: "screen" }} />
+
                     <text
                       x={labelPoint.x}
                       y={labelPoint.y}
@@ -224,10 +272,48 @@ export default function SpinningWheel({
                       textAnchor="middle"
                       dominantBaseline="middle"
                       className="select-none fill-zinc-900 dark:fill-zinc-900"
-                      style={{ fontSize: 12, fontWeight: 600 }}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        filter: spinning ? "blur(0.9px)" : "none",
+                        opacity: spinning ? 0.92 : 1,
+                      }}
                     >
+                      {/* Winner: add subtle digital glitch flicker */}
                       {truncatedTitles[i]}
                     </text>
+
+                    {winnerIndex === i && !spinning ? (
+                      <>
+                        <text
+                          x={labelPoint.x}
+                          y={labelPoint.y}
+                          transform={`rotate(${midAngle + 90} ${labelPoint.x} ${labelPoint.y})`}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="select-none fill-cyan-300 opacity-85 wheel-glitch"
+                          style={{ fontSize: 12, fontWeight: 700, mixBlendMode: "screen" }}
+                        >
+                          {truncatedTitles[i]}
+                        </text>
+                        <text
+                          x={labelPoint.x}
+                          y={labelPoint.y}
+                          transform={`rotate(${midAngle + 90} ${labelPoint.x} ${labelPoint.y})`}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="select-none fill-violet-300 opacity-70 wheel-glitch"
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            mixBlendMode: "screen",
+                            animationDelay: "40ms",
+                          }}
+                        >
+                          {truncatedTitles[i]}
+                        </text>
+                      </>
+                    ) : null}
                   </g>
                 );
               })}

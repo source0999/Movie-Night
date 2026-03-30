@@ -7,6 +7,13 @@ import type { LibraryMovie } from "../../lib/movieLibrary";
 import SpinningWheel from "../../components/SpinningWheel";
 import ConfettiBurst from "../../components/ConfettiBurst";
 
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
+function withBasePath(href: string) {
+  if (!basePath) return href;
+  if (href === "/") return basePath;
+  return `${basePath}${href}`;
+}
+
 export default function RoulettePage() {
   const { hydrated, library } = useMovieLibrary();
   const watchlist = library.watchlist;
@@ -48,7 +55,7 @@ export default function RoulettePage() {
               Add some movies so the wheel can pick tonight’s option.
             </p>
             <Link
-              href="/"
+              href={withBasePath("/")}
               className="mt-4 inline-flex rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
             >
               Go add some movies!
@@ -73,6 +80,9 @@ export default function RoulettePage() {
           <div className="absolute inset-0 opacity-30">
             <div className="h-full w-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.25),transparent_45%)]" />
           </div>
+
+          {/* Subtle digital glitch overlay (purple + cyan) */}
+          <div className="absolute inset-0 pointer-events-none digital-glitch-overlay" key={confettiKey} />
 
           <div className="relative w-full max-w-2xl">
             <h2 className="text-5xl font-black tracking-tight">Winner!</h2>

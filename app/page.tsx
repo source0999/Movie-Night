@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import MovieDetailsModal from "../components/MovieDetailsModal";
 import CategoryDropdown from "../components/CategoryDropdown";
 import { useMovieLibrary } from "../hooks/useMovieLibrary";
@@ -13,6 +14,7 @@ import SaveMoviePromptModal from "../components/SaveMoviePromptModal";
 import { calculateGroupAverage } from "../lib/movieLibrary";
 import MovieCard from "../components/MovieCard";
 import { useAuth } from "../hooks/useAuth";
+import { tmdbSearchMovies } from "../src/lib/tmdbClient";
 
 const SAVE_OPTIONS: Array<{ value: LibraryCategory; label: string }> = [
   { value: "watchlist", label: categoryLabels.watchlist },
@@ -26,7 +28,11 @@ function releaseYear(releaseDate: string | null) {
 
 function isMissingApiKeyError(message: string | null) {
   if (!message) return false;
-  return message.toLowerCase().includes("tmdb api key is missing");
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("tmdb api key is missing") ||
+    lower.includes("tmdb read access token is missing")
+  );
 }
 
 export default function Home() {
@@ -104,17 +110,17 @@ export default function Home() {
     setMovies([]); // Avoid showing stale results while loading.
     setError(null);
     try {
-      const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(q)}`);
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error || "TMDB search failed.");
-      }
-
-      const data = (await res.json()) as { results?: LibraryMovie[] };
       if (requestId !== searchRequestIdRef.current) return;
-      setMovies(data.results ?? []);
+      const tmdbResults = await tmdbSearchMovies(q);
+      if (requestId !== searchRequestIdRef.current) return;
+      setMovies(
+        tmdbResults.map((m) => ({
+          id: m.id,
+          title: m.title,
+          release_date: m.release_date,
+          poster_path: m.poster_path,
+        })),
+      );
     } catch (err) {
       if (requestId !== searchRequestIdRef.current) return;
       setMovies([]);
@@ -216,15 +222,12 @@ export default function Home() {
             <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
               Loading...
             </div>
-          ) : movies.length === 0 ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-              Type a movie title to see results.
-            </div>
           ) : null}
 
           {!loading ? (
             <div className="mt-6 grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {movies.map((movie) => {
+              <AnimatePresence initial={false}>
+                {movies.map((movie, idx) => {
                 const year = releaseYear(movie.release_date);
                 const posterSrc = movie.poster_path
                   ? `${posterBase}${movie.poster_path}`
@@ -232,50 +235,64 @@ export default function Home() {
                 const isSaved = library.watchlist.some((m) => m.id === movie.id);
 
                 return (
-                  <MovieCard
+                  <motion.div
                     key={movie.id}
-                    movie={movie}
-                    year={year}
-                    posterSrc={posterSrc}
-                    isSearch={true}
-                    isSaved={isSaved}
-                    isDeleting={deletingIds[movie.id]}
-                    onDelete={isSaved ? () => requestDelete(movie.id) : undefined}
-                    actionsNode={
-                      <div className="flex items-center justify-between gap-2">
-                        <CategoryDropdown
-                          summaryLabel={
-                            saveFlash[movie.id]
-                              ? "Saved!"
-                              : hydrated
-                                ? "Save to..."
-                                : "Loading..."
-                          }
-                          options={SAVE_OPTIONS}
-                          disabled={!hydrated}
-                          align="left"
-                          onSelect={(cat) => {
-                            setSavePromptCategory(cat);
-                            setSavePromptMovie(movie);
-                            setSavePromptOpen(true);
-                          }}
-                        />
+                    initial={{ opacity: 0, scale: 0.97 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    transition={{
+                      duration: 0.35,
+                      ease: "easeOut",
+                      delay: idx * 0.1,
+                    }}
+                  >
+                    <MovieCard
+                      movie={movie}
+                      year={year}
+                      posterSrc={posterSrc}
+                      isSearch={true}
+                      isSaved={isSaved}
+                      isDeleting={deletingIds[movie.id]}
+                      onDelete={
+                        isSaved ? () => requestDelete(movie.id) : undefined
+                      }
+                      actionsNode={
+                        <div className="flex items-center justify-between gap-2">
+                          <CategoryDropdown
+                            summaryLabel={
+                              saveFlash[movie.id]
+                                ? "Saved!"
+                                : hydrated
+                                  ? "Save to..."
+                                  : "Loading..."
+                            }
+                            options={SAVE_OPTIONS}
+                            disabled={!hydrated}
+                            align="left"
+                            onSelect={(cat) => {
+                              setSavePromptCategory(cat);
+                              setSavePromptMovie(movie);
+                              setSavePromptOpen(true);
+                            }}
+                          />
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedMovieId(movie.id);
-                            setDetailsOpen(true);
-                          }}
-                          className="whitespace-nowrap rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
-                        >
-                          Details
-                        </button>
-                      </div>
-                    }
-                  />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedMovieId(movie.id);
+                              setDetailsOpen(true);
+                            }}
+                            className="whitespace-nowrap rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
+                          >
+                            Details
+                          </button>
+                        </div>
+                      }
+                    />
+                  </motion.div>
                 );
               })}
+              </AnimatePresence>
             </div>
           ) : null}
         </section>
@@ -283,7 +300,19 @@ export default function Home() {
         <section className="mt-12">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">Recently Watched</h2>
+              <motion.h2
+                initial={{ x: -18, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 300,
+                  damping: 22,
+                  mass: 0.6,
+                }}
+                className="text-2xl font-semibold tracking-tight"
+              >
+                Recently Watched
+              </motion.h2>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                 Based on your last stored “Watched” picks.
               </p>
@@ -300,11 +329,12 @@ export default function Home() {
             </div>
           ) : (
             <div className="mt-6 grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {library.watched
-                .slice()
-                .reverse()
-                .slice(0, 8)
-                .map((movie) => {
+              <AnimatePresence initial={false}>
+                {library.watched
+                  .slice()
+                  .reverse()
+                  .slice(0, 8)
+                  .map((movie, idx) => {
                   const year = releaseYear(movie.release_date);
                   const posterSrc = movie.poster_path
                     ? `${posterBase}${movie.poster_path}`
@@ -316,14 +346,22 @@ export default function Home() {
                   );
 
                   return (
-                    <article
+                    <motion.div
                       key={movie.id}
-                      className={`relative flex flex-col overflow-visible rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 ease-out dark:border-zinc-800 dark:bg-zinc-900 ${
-                        deletingIds[movie.id]
-                          ? "scale-[0.98] opacity-0"
-                          : "scale-100 opacity-100"
-                      }`}
+                      initial={{ opacity: 0, scale: 0.97 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{
+                        duration: 0.35,
+                        ease: "easeOut",
+                        delay: idx * 0.1,
+                      }}
                     >
+                      <article
+                        className={`movie-card relative flex flex-col overflow-visible ${
+                          deletingIds[movie.id] ? "is-deleting" : "opacity-100"
+                        }`}
+                      >
                       <button
                         type="button"
                         onClick={() => {
@@ -352,7 +390,7 @@ export default function Home() {
                         </svg>
                       </button>
 
-                      <div className="aspect-[2/3] w-full overflow-hidden rounded-t-2xl bg-zinc-100 dark:bg-zinc-800">
+                      <div className="aspect-[2/3] w-full overflow-hidden rounded-t-2xl bg-[rgba(255,255,255,0.03)] dark:bg-[rgba(255,255,255,0.02)]">
                         {posterSrc ? (
                           <img
                             src={posterSrc}
@@ -379,7 +417,7 @@ export default function Home() {
                           ) : null}
                         </div>
 
-                        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+                        <div className="rounded-xl border border-zinc-200/10 bg-[rgba(255,255,255,0.02)] p-3 dark:border-zinc-800/60 dark:bg-[rgba(255,255,255,0.02)]">
                           <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                             Recommended by
                           </p>
@@ -387,11 +425,11 @@ export default function Home() {
                             {movie.recommendedBy?.trim() || "Someone"}
                           </p>
 
-                          <div className="mt-3">
+                          <div className="mt-3 digital-readout rounded-xl p-3">
                             <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                               Ratings (1-10)
                             </p>
-                            <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+                            <p className="mt-1 text-sm font-semibold tracking-tight text-cyan-200 dark:text-cyan-200">
                               A: {formatRating10(movie.alexRating)}, B:{" "}
                               {formatRating10(movie.brittonRating)}, N:{" "}
                               {formatRating10(movie.nabiRating)}
@@ -408,9 +446,11 @@ export default function Home() {
                           </div>
                         </div>
                       </div>
-                    </article>
+                      </article>
+                    </motion.div>
                   );
                 })}
+              </AnimatePresence>
             </div>
           )}
         </section>
@@ -447,10 +487,10 @@ export default function Home() {
                   return (
                     <article
                       key={movie.id}
-                      className={`relative flex flex-col overflow-visible rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 ease-out dark:border-zinc-800 dark:bg-zinc-900 ${
+                      className={`movie-card relative flex flex-col overflow-visible ${
                         deletingIds[movie.id]
-                          ? "scale-[0.98] opacity-0"
-                          : "scale-100 opacity-100"
+                          ? "is-deleting"
+                          : "opacity-100"
                       }`}
                     >
                       <button
@@ -479,7 +519,7 @@ export default function Home() {
                         </svg>
                       </button>
 
-                      <div className="aspect-[2/3] w-full overflow-hidden rounded-t-2xl bg-zinc-100 dark:bg-zinc-800">
+                      <div className="aspect-[2/3] w-full overflow-hidden rounded-t-2xl bg-[rgba(255,255,255,0.03)] dark:bg-[rgba(255,255,255,0.02)]">
                         {posterSrc ? (
                           <img
                             src={posterSrc}

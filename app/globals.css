@@ -1,26 +1,183 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0c;
+  --foreground: #ededed;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+body {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      circle at 12% 8%,
+      rgba(46, 16, 101, 0.15) 0%,
+      rgba(46, 16, 101, 0) 55%
+    ),
+    radial-gradient(
+      circle at 92% 92%,
+      rgba(30, 27, 75, 0.15) 0%,
+      rgba(30, 27, 75, 0) 52%
+    );
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family: var(--font-inter), system-ui, -apple-system, Segoe UI, Roboto,
+    Helvetica, Arial, sans-serif;
+  position: relative;
+  isolation: isolate;
+}
+
+/* Subtle grain overlay (premium texture) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.02; /* 2% */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+  mix-blend-mode: overlay;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-orbitron), system-ui, -apple-system, Segoe UI, Roboto,
+    Helvetica, Arial, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+@keyframes wheelGlitch {
+  0% {
+    transform: translate(0px, 0px);
+    opacity: 0.75;
+    filter: blur(0.2px);
+  }
+  20% {
+    transform: translate(-2px, 1px);
+    opacity: 0.95;
+    filter: blur(0.6px);
+  }
+  40% {
+    transform: translate(2px, -1px);
+    opacity: 0.8;
+    filter: blur(0.3px);
+  }
+  60% {
+    transform: translate(-1px, 0px);
+    opacity: 0.9;
+    filter: blur(0.5px);
+  }
+  80% {
+    transform: translate(1px, 1px);
+    opacity: 0.85;
+    filter: blur(0.4px);
+  }
+  100% {
+    transform: translate(0px, 0px);
+    opacity: 0.75;
+    filter: blur(0.2px);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.wheel-glitch {
+  animation: wheelGlitch 900ms steps(2, end) 1;
+}
+
+@keyframes digitalGlitchOverlay {
+  0% {
+    opacity: 0;
+    transform: translate(0px, 0px);
+    filter: blur(0.2px);
+  }
+  15% {
+    opacity: 0.55;
+  }
+  35% {
+    transform: translate(-2px, 1px) skewX(-10deg);
+    filter: blur(0.6px);
+  }
+  55% {
+    transform: translate(2px, -1px) skewX(8deg);
+    filter: blur(0.4px);
+  }
+  75% {
+    transform: translate(-1px, 0px);
+    filter: blur(0.7px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0px, 0px);
+    filter: blur(0.2px);
+  }
+}
+
+.digital-glitch-overlay {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(34, 211, 238, 0.18) 0px,
+    rgba(34, 211, 238, 0.18) 1px,
+    rgba(107, 33, 168, 0.1) 2px,
+    transparent 5px
+  );
+  mix-blend-mode: screen;
+  animation: digitalGlitchOverlay 900ms steps(2, end) 1;
+}
+
+/* Movie cards */
+.movie-card {
+  position: relative;
+  border-radius: 1rem; /* matches Tailwind rounded-2xl */
+  padding: 1px; /* 1px gradient border */
+  background:
+    linear-gradient(to bottom right, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0))
+      border-box,
+    rgba(255, 255, 255, 0.03) padding-box;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition:
+    transform 300ms ease-out,
+    box-shadow 300ms ease-out,
+    opacity 300ms ease-out,
+    filter 300ms ease-out;
+}
+
+.movie-card:hover {
+  transform: translateY(-5px);
+  z-index: 50; /* ensure dropdowns/overlaps render above neighbors on hover */
+  box-shadow:
+    0 0 0 1px rgba(168, 85, 247, 0.35),
+    0 0 26px rgba(168, 85, 247, 0.28);
+  background:
+    linear-gradient(to bottom right, rgba(168, 85, 247, 0.45), rgba(255, 255, 255, 0))
+      border-box,
+    rgba(255, 255, 255, 0.03) padding-box;
+}
+
+.movie-card.is-deleting {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+/* A/B/N rating readout */
+.digital-readout {
+  font-family: var(--font-mono),
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  letter-spacing: 0.02em;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 0 0 1px rgba(168, 85, 247, 0.18),
+    inset 0 0 14px rgba(107, 33, 168, 0.14);
 }

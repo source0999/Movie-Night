@@ -9,25 +9,24 @@ import {
   type LibraryMovie,
   type MovieLibrary,
 } from "../lib/movieLibrary";
-import { db } from "../src/lib/firebase";
+import { initFirebase } from "../src/lib/firebase";
 import {
   collection,
   deleteDoc,
   doc,
-  onSnapshot,
   query,
   setDoc,
+  onSnapshot,
   where,
 } from "firebase/firestore";
+import type { Firestore } from "firebase/firestore";
+import { useRef } from "react";
 
 export function useMovieLibrary() {
   const [library, setLibrary] = useState<MovieLibrary>(emptyLibrary);
   const [hydrated, setHydrated] = useState(false);
 
-  const moviesCollectionRef = useMemo(() => {
-    // Ensure stable references inside memo.
-    return collection(db, "movies");
-  }, []);
+  const dbRef = useRef<Firestore | null>(null);
 
   useEffect(() => {
     let watchlistLoaded = false;
@@ -110,57 +109,77 @@ export function useMovieLibrary() {
       setHydrated(true);
     };
 
-    const watchlistQ = query(
-      moviesCollectionRef,
-      where("category", "==", "watchlist"),
-    );
-    const watchedQ = query(
-      moviesCollectionRef,
-      where("category", "==", "watched"),
-    );
+    const run = async () => {
+      await Promise.resolve();
+      const { db } = initFirebase();
+      dbRef.current = db;
 
-    const unsubWatchlist = onSnapshot(
-      watchlistQ,
-      (snap) => {
-        watchlist = snap.docs
-          .map((docSnap) => normalizeMovie(docSnap.data()))
-          .filter((m): m is LibraryMovie => !!m);
-        watchlistLoaded = true;
-        maybeHydrate();
-      },
-      (err) => {
-        console.error("Firestore watchlist listener error", err);
-        watchlist = [];
-        watchlistLoaded = true;
-        maybeHydrate();
-      },
-    );
+      const moviesCollectionRef = collection(db, "movies");
 
-    const unsubWatched = onSnapshot(
-      watchedQ,
-      (snap) => {
-        watched = snap.docs
-          .map((docSnap) => normalizeMovie(docSnap.data()))
-          .filter((m): m is LibraryMovie => !!m);
-        watchedLoaded = true;
-        maybeHydrate();
-      },
-      (err) => {
-        console.error("Firestore watched listener error", err);
-        watched = [];
-        watchedLoaded = true;
-        maybeHydrate();
-      },
-    );
+      const watchlistQ = query(
+        moviesCollectionRef,
+        where("category", "==", "watchlist"),
+      );
+      const watchedQ = query(
+        moviesCollectionRef,
+        where("category", "==", "watched"),
+      );
+
+      const unsubWatchlist = onSnapshot(
+        watchlistQ,
+        (snap) => {
+          watchlist = snap.docs
+            .map((docSnap) => normalizeMovie(docSnap.data()))
+            .filter((m): m is LibraryMovie => !!m);
+          watchlistLoaded = true;
+          maybeHydrate();
+        },
+        (err) => {
+          console.error("Firestore watchlist listener error", err);
+          watchlist = [];
+          watchlistLoaded = true;
+          maybeHydrate();
+        },
+      );
+
+      const unsubWatched = onSnapshot(
+        watchedQ,
+        (snap) => {
+          watched = snap.docs
+            .map((docSnap) => normalizeMovie(docSnap.data()))
+            .filter((m): m is LibraryMovie => !!m);
+          watchedLoaded = true;
+          maybeHydrate();
+        },
+        (err) => {
+          console.error("Firestore watched listener error", err);
+          watched = [];
+          watchedLoaded = true;
+          maybeHydrate();
+        },
+      );
+
+      return () => {
+        unsubWatchlist();
+        unsubWatched();
+      };
+    };
+
+    let cleanup: undefined | (() => void);
+    void run().then((c) => {
+      cleanup = c ?? undefined;
+    });
 
     return () => {
-      unsubWatchlist();
-      unsubWatched();
+      cleanup?.();
     };
-  }, [moviesCollectionRef]);
+  }, []);
 
   const saveMovie = useMemo(
     () => (movie: LibraryMovie, category: LibraryCategory) => {
+      const db = dbRef.current;
+      if (!db) return;
+
       setLibrary((prev) => moveMovieInLibrary(prev, movie, category));
 
       const docRef = doc(db, "movies", String(movie.id));
@@ -200,6 +219,9 @@ export function useMovieLibrary() {
 
   const removeMovie = useMemo(
     () => (movieId: number) => {
+      const db = dbRef.current;
+      if (!db) return;
+
       setLibrary((prev) => removeMovieFromLibrary(prev, movieId));
 
       const docRef = doc(db, "movies", String(movieId));
@@ -212,6 +234,9 @@ export function useMovieLibrary() {
 
   const moveMovie = useMemo(
     () => (movie: LibraryMovie, toCategory: LibraryCategory) => {
+      const db = dbRef.current;
+      if (!db) return;
+
       setLibrary((prev) => moveMovieInLibrary(prev, movie, toCategory));
 
       const docRef = doc(db, "movies", String(movie.id));

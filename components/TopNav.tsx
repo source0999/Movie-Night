@@ -11,6 +11,13 @@ const LINKS = [
   { href: "/roulette", label: "Movie Roulette" },
 ] as const;
 
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
+function withBasePath(href: string) {
+  if (!basePath) return href;
+  if (href === "/") return basePath;
+  return `${basePath}${href}`;
+}
+
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href;
@@ -25,6 +32,7 @@ export default function TopNav({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   function resetHomeSearch() {
     if (typeof window === "undefined") return;
@@ -40,11 +48,29 @@ export default function TopNav({
     void run();
   }, [pathname]);
 
+  useEffect(() => {
+    // Ensure greeting only appears on the client after hydration.
+    let cancelled = false;
+    const run = async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      if (!user) {
+        setDisplayName(null);
+        return;
+      }
+      setDisplayName(user.name);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   return (
     <nav className="border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-black/60">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Link
-          href="/"
+          href={withBasePath("/")}
           onClick={() => resetHomeSearch()}
           className="text-sm font-semibold text-zinc-900 dark:text-zinc-50"
         >
@@ -58,7 +84,7 @@ export default function TopNav({
               return (
                 <Link
                   key={l.href}
-                  href={l.href}
+                  href={withBasePath(l.href)}
                   onClick={() => {
                     if (l.href === "/") resetHomeSearch();
                   }}
@@ -87,7 +113,7 @@ export default function TopNav({
             {user ? (
               <>
                 <div className="hidden text-sm font-medium text-zinc-900 dark:text-zinc-50 sm:block">
-                  Hi, {user.name}!
+                  Hi, {displayName}!
                 </div>
                 <button
                   type="button"
@@ -121,7 +147,7 @@ export default function TopNav({
                 return (
                   <Link
                     key={l.href}
-                    href={l.href}
+                    href={withBasePath(l.href)}
                     onClick={() => {
                       setOpen(false);
                       if (l.href === "/") resetHomeSearch();

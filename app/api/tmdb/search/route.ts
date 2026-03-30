@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 
+// Required for `output: "export"` static builds.
+// These API routes are not truly usable from static HTML, but this unblocks Next's build step.
+export const dynamic = "force-static";
+export const revalidate = 0;
+
 type TMDBMovieResult = {
   id: number;
   title: string;

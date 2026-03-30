@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { tmdbGetMovieDetails } from "../src/lib/tmdbClient";
 
 type MovieDetails = {
   id: number;
@@ -17,7 +18,11 @@ function releaseYear(releaseDate: string | null) {
 
 function isMissingApiKeyError(message: string | null) {
   if (!message) return false;
-  return message.toLowerCase().includes("tmdb api key is missing");
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("tmdb api key is missing") ||
+    lower.includes("tmdb read access token is missing")
+  );
 }
 
 export default function MovieDetailsModal({
@@ -48,16 +53,8 @@ export default function MovieDetailsModal({
       setMovie(null);
 
       try {
-        const res = await fetch(`/api/tmdb/movie/${movieId}`);
-        if (!res.ok) {
-          const data = (await res.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(data?.error || "Failed to load movie details.");
-        }
-
-        const data = (await res.json()) as { movie: MovieDetails };
-        if (!cancelled) setMovie(data.movie);
+        const data = await tmdbGetMovieDetails(movieId);
+        if (!cancelled) setMovie(data);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {

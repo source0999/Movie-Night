@@ -154,14 +154,14 @@ export default function LibraryPage() {
                 return (
                   <article
                     key={movie.id}
-                    className={`flex flex-col overflow-visible rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 ease-out dark:border-zinc-800 dark:bg-zinc-900/60 ${
+                      className={`movie-card flex flex-col overflow-visible ${
                       deletingIds[movie.id]
-                        ? "scale-[0.98] opacity-0"
-                        : "scale-100 opacity-100"
+                          ? "is-deleting"
+                          : "opacity-100"
                     }`}
                   >
                     <div className="relative">
-                      <div className="aspect-[2/3] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                      <div className="aspect-[2/3] w-full overflow-hidden rounded-t-2xl bg-[rgba(255,255,255,0.03)] dark:bg-[rgba(255,255,255,0.02)]">
                         {posterSrc ? (
                           <img
                             src={posterSrc}
@@ -195,7 +195,7 @@ export default function LibraryPage() {
 
                       {isWatched ? (
                         <div className="mt-3 grid gap-3">
-                          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+                          <div className="rounded-xl border border-zinc-200/10 bg-[rgba(255,255,255,0.02)] p-3 dark:border-zinc-800/60 dark:bg-[rgba(255,255,255,0.02)]">
                             <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                               Recommended by
                             </p>
@@ -204,13 +204,13 @@ export default function LibraryPage() {
                             </p>
                           </div>
 
-                          <div className="rounded-xl border border-zinc-200 bg-zinc-100 p-3 dark:border-zinc-800 dark:bg-zinc-900/30">
+                          <div className="rounded-xl digital-readout border border-white/5 p-3">
                             <div className="flex items-center justify-between gap-4">
                               <div>
                                 <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                                   Group ratings
                                 </p>
-                                <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+                                <p className="mt-1 text-sm font-semibold tracking-tight text-cyan-200 dark:text-cyan-200">
                                   A: {formatRating10(movie.alexRating)}, B:{" "}
                                   {formatRating10(movie.brittonRating)}, N:{" "}
                                   {formatRating10(movie.nabiRating)}

@@ -54,19 +54,11 @@ export default function ConfettiBurst({
     const onResize = () => resize();
     window.addEventListener("resize", onResize);
 
-    const colors = [
-      "#F43F5E",
-      "#FB923C",
-      "#FDE047",
-      "#4ADE80",
-      "#22C55E",
-      "#38BDF8",
-      "#60A5FA",
-      "#A78BFA",
-    ];
+    // Purple + cyan palette for a high-tech celebratory burst
+    const colors = ["#A855F7", "#22D3EE", "#60A5FA", "#34D399", "#C084FC"];
 
     const particles: Particle[] = [];
-    const count = Math.floor(140 + Math.random() * 40);
+    const count = Math.floor(95 + Math.random() * 25);
 
     for (let i = 0; i < count; i++) {
       particles.push({

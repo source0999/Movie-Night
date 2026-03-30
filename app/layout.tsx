@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter, Orbitron } from "next/font/google";
 import "./globals.css";
 import AuthGate from "../components/AuthGate";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const orbitron = Orbitron({
+  variable: "--font-orbitron",
   subsets: ["latin"],
 });
 
@@ -17,7 +22,7 @@ export const metadata: Metadata = {
   title: "Movie Night",
   description: "Search TMDB and pick a movie for tonight.",
   icons: {
-    icon: "/favicon.svg",
+    icon: "favicon.svg",
   },
 };
 
@@ -31,7 +36,7 @@ export default function RootLayout({
       lang="en"
       // Prevent hydration errors caused by browser/extension-injected attributes.
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${orbitron.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <AuthGate>{children}</AuthGate>

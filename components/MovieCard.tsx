@@ -30,10 +30,8 @@ export default function MovieCard({
 
   return (
     <article
-      className={`relative flex flex-col overflow-visible rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-300 ease-out dark:border-zinc-800 dark:bg-zinc-900 ${
-        // Avoid `transform` (e.g. `scale-100`) in the normal state so this card
-        // doesn't create a stacking context that can hide the dropdown menu.
-        isDeleting ? "scale-[0.98] opacity-0" : "opacity-100"
+      className={`movie-card relative flex flex-col overflow-visible ${
+        isDeleting ? "is-deleting" : "opacity-100"
       }`}
     >
       {shouldShowDelete ? (
@@ -64,8 +62,8 @@ export default function MovieCard({
         </button>
       ) : null}
 
-      <div className="relative">
-        <div className="aspect-[2/3] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+      <div className="relative flex-1">
+        <div className="aspect-[2/3] w-full overflow-hidden rounded-[15px] bg-[rgba(255,255,255,0.03)] dark:bg-[rgba(255,255,255,0.02)]">
           {posterSrc ? (
             <img
               src={posterSrc}
@@ -74,7 +72,7 @@ export default function MovieCard({
               loading="lazy"
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-zinc-100 to-zinc-200 px-4 text-center dark:from-zinc-800 dark:to-zinc-900">
+            <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[rgba(168,85,247,0.18)] to-[rgba(34,211,238,0.08)] px-4 text-center">
               <div className="text-xs font-medium text-zinc-500 dark:text-zinc-300">
                 No poster image
               </div>
