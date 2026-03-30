@@ -28,6 +28,7 @@ jobs:
       - name: Build (Next.js)
         run: npm run build
         env:
+          # Firebase (required by src/lib/firebase.ts at runtime)
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
           NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
@@ -35,14 +36,14 @@ jobs:
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
           NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
 
-          # Required for in-browser TMDB calls (TMDB read token).
+          # Required for in-browser TMDB calls
           NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN: ${{ secrets.NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN }}
 
       - name: Deploy exported site
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: master
+          branch: gh-pages
           folder: ./out
           clean: true
 

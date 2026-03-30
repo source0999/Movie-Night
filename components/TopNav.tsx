@@ -11,7 +11,10 @@ const LINKS = [
   { href: "/roulette", label: "Movie Roulette" },
 ] as const;
 
-const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/Movie-Night").replace(
+  /\/$/,
+  "",
+);
 function withBasePath(href: string) {
   if (!basePath) return href;
   if (href === "/") return basePath;

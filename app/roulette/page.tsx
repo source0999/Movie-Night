@@ -7,7 +7,10 @@ import type { LibraryMovie } from "../../lib/movieLibrary";
 import SpinningWheel from "../../components/SpinningWheel";
 import ConfettiBurst from "../../components/ConfettiBurst";
 
-const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/Movie-Night").replace(
+  /\/$/,
+  "",
+);
 function withBasePath(href: string) {
   if (!basePath) return href;
   if (href === "/") return basePath;
