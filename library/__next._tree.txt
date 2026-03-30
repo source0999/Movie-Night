@@ -1,5 +1,5 @@
-:HL["/Movie-Night/_next/static/chunks/0jgs1ye6p9b6o.css","style"]
+:HL["/Movie-Night/_next/static/chunks/0fd~bidzyadxn.css","style"]
 :HL["/Movie-Night/_next/static/media/0acc7fdf55eb3220-s.p.12o-f1.6qra-s.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/Movie-Night/_next/static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/Movie-Night/_next/static/media/83afe278b6a6bb3c-s.p.0q-301v4kxxnr.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"library","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"MSy46Kzmwbbkqe1KuIL1g"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"library","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"7dbd9cKDwtaye1Oaw0zyR"}
