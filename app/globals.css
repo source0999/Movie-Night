@@ -190,3 +190,8 @@ h6 {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+.touch-pan-x {
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}

@@ -176,7 +176,7 @@ export default function TopNav({
       {open ? (
         <div className="md:hidden">
           <div className="mx-auto max-w-6xl px-4 pb-3 sm:px-6 lg:px-8">
-            <div className="flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-black/40">
+            <div className="flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95">
               {LINKS.map((l) => {
                 const active = isActive(pathname, l.href);
                 return (
@@ -190,7 +190,7 @@ export default function TopNav({
                     className={`min-h-[44px] rounded-xl px-4 py-3 text-sm font-medium transition ${
                       active
                         ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-black"
-                        : "bg-white text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900/40"
+                        : "bg-zinc-50 text-zinc-900 hover:bg-zinc-100 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-900"
                     }`}
                     aria-current={active ? "page" : undefined}
                   >

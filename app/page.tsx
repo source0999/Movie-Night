@@ -350,7 +350,7 @@ export default function Home() {
               No movies in Watched yet.
             </div>
           ) : (
-            <div className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 scrollbar-hide md:grid md:gap-6 md:overflow-visible md:snap-none md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="mt-6 flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 scrollbar-hide scroll-smooth touch-pan-x md:grid md:gap-6 md:overflow-visible md:snap-none md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               <AnimatePresence initial={false}>
                 {library.watched
                   .slice()
@@ -497,7 +497,7 @@ export default function Home() {
               Nothing in your Watchlist yet.
             </div>
           ) : (
-            <div className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 scrollbar-hide md:grid md:gap-6 md:overflow-visible md:snap-none md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="mt-6 flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 scrollbar-hide scroll-smooth touch-pan-x md:grid md:gap-6 md:overflow-visible md:snap-none md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {library.watchlist
                 .slice()
                 .reverse()
