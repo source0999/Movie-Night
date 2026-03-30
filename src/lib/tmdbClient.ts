@@ -10,6 +10,34 @@ type TmdbAuth =
   | { type: "bearer"; token: string; tokenLooksLikeJwt: true }
   | { type: "apiKey"; key: string; tokenLooksLikeJwt: false };
 
+function base64UrlDecode(input: string): string | null {
+  try {
+    const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+    const pad =
+      normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
+    return atob(normalized + pad);
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtPayload(token: string): { aud?: unknown; scopes?: unknown } | null {
+  // JWT format: header.payload.signature
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const payloadJson = base64UrlDecode(parts[1]);
+  if (!payloadJson) return null;
+  try {
+    const payload = JSON.parse(payloadJson) as Record<string, unknown>;
+    return {
+      aud: payload.aud,
+      scopes: payload.scopes,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function getTmdbAuth(): TmdbAuth {
   const value = process.env.NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN?.trim();
   if (!value) {
@@ -27,6 +55,11 @@ function getTmdbAuth(): TmdbAuth {
   // Fallback: if someone placed the raw API key into the same env var,
   // use it as the `api_key` query parameter instead of Bearer.
   return { type: "apiKey", key: value, tokenLooksLikeJwt: false };
+}
+
+function getOptionalTmdbApiKey(): string | null {
+  const key = process.env.NEXT_PUBLIC_TMDB_API_KEY?.trim();
+  return key ? key : null;
 }
 
 export async function tmdbSearchMovies(
@@ -59,7 +92,11 @@ export async function tmdbSearchMovies(
     // Retry once using the alternate auth method (helpful if a secret is the wrong type).
     if (err.status_code === 7 && tmdbAuth.type === "bearer") {
       const retryUrl = new URL(url.toString());
-      retryUrl.searchParams.set("api_key", tmdbAuth.token);
+      const apiKey = getOptionalTmdbApiKey();
+      const apiKeyRetryUsed = apiKey
+        ? "NEXT_PUBLIC_TMDB_API_KEY"
+        : "TMDB_READ_ACCESS_TOKEN-as-api_key";
+      retryUrl.searchParams.set("api_key", apiKey ?? tmdbAuth.token);
 
       const retryRes = await fetch(retryUrl.toString(), {
         headers: { "Content-Type": "application/json" },
@@ -104,6 +141,8 @@ export async function tmdbSearchMovies(
               status_message: err.status_message,
               authStrategyTried: ["bearer", "api_key"],
               tokenLooksLikeJwt: tmdbAuth.tokenLooksLikeJwt,
+              jwtPayload: decodeJwtPayload(tmdbAuth.token),
+              apiKeyRetryUsed,
               retryStatus_code: retryErr.status_code,
               retryStatus_message: retryErr.status_message,
             },
@@ -122,6 +161,7 @@ export async function tmdbSearchMovies(
             status_message: err.status_message,
             authStrategyTried: [tmdbAuth.type],
             tokenLooksLikeJwt: tmdbAuth.tokenLooksLikeJwt,
+            jwtPayload: tmdbAuth.type === "bearer" ? decodeJwtPayload(tmdbAuth.token) : null,
             details: err.details,
           },
         },
@@ -190,7 +230,11 @@ export async function tmdbGetMovieDetails(
 
     if (err.status_code === 7 && tmdbAuth.type === "bearer") {
       const retryUrl = new URL(url);
-      retryUrl.searchParams.set("api_key", tmdbAuth.token);
+      const apiKey = getOptionalTmdbApiKey();
+      const apiKeyRetryUsed = apiKey
+        ? "NEXT_PUBLIC_TMDB_API_KEY"
+        : "TMDB_READ_ACCESS_TOKEN-as-api_key";
+      retryUrl.searchParams.set("api_key", apiKey ?? tmdbAuth.token);
 
       const retryRes = await fetch(retryUrl.toString(), {
         headers: { "Content-Type": "application/json" },
@@ -222,6 +266,8 @@ export async function tmdbGetMovieDetails(
               status_message: err.status_message,
               authStrategyTried: ["bearer", "api_key"],
               tokenLooksLikeJwt: tmdbAuth.tokenLooksLikeJwt,
+              jwtPayload: decodeJwtPayload(tmdbAuth.token),
+              apiKeyRetryUsed,
               retryStatus_code: retryErr.status_code,
               retryStatus_message: retryErr.status_message,
             },
@@ -240,6 +286,7 @@ export async function tmdbGetMovieDetails(
             status_message: err.status_message,
             authStrategyTried: [tmdbAuth.type],
             tokenLooksLikeJwt: tmdbAuth.tokenLooksLikeJwt,
+            jwtPayload: tmdbAuth.type === "bearer" ? decodeJwtPayload(tmdbAuth.token) : null,
             details: err.details,
           },
         },

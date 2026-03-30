@@ -224,7 +224,8 @@ export default function Home() {
                 {isMissingApiKeyError(error) ? (
                   <p className="mt-2 text-xs text-amber-100/80 dark:text-amber-100/70">
                     Check that <code className="font-mono">NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN</code>{" "}
-                    is a valid TMDB read access token (JWT). Also ensure the GitHub Secret name matches exactly.
+                    is a valid TMDB read access token (JWT with <code>scopes: [api_read]</code>). Also ensure
+                    the GitHub Secret name matches exactly.
                   </p>
                 ) : null}
               </div>
