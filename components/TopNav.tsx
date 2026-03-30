@@ -7,24 +7,29 @@ import type { MovieNightUser } from "../lib/auth";
 
 const LINKS = [
   { href: "/", label: "Home" },
-  { href: "/library/", label: "Library" },
-  { href: "/roulette/", label: "Movie Roulette" },
+  { href: "/library", label: "Library" },
+  { href: "/roulette", label: "Movie Roulette" },
 ] as const;
 
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/Movie-Night").replace(
   /\/$/,
   "",
 );
-function withBasePath(href: string) {
-  if (!basePath) return href;
-  if (href === "/") return `${basePath}/`;
-  return `${basePath}${href}`;
-}
 
 function isActive(pathname: string, href: string) {
   const norm = (p: string) => (p.endsWith("/") ? p.slice(0, -1) : p);
-  if (href === "/") return norm(pathname) === "";
-  return norm(pathname) === norm(href);
+
+  // Next.js `basePath` means `usePathname()` often includes it (e.g. `/Movie-Night/library`).
+  // For comparisons, strip it so link highlighting continues to work.
+  let cleanPath = pathname;
+  if (basePath && basePath !== "/" && cleanPath.startsWith(`${basePath}/`)) {
+    cleanPath = cleanPath.slice(basePath.length);
+  } else if (basePath && basePath !== "/" && cleanPath === basePath) {
+    cleanPath = "/";
+  }
+
+  if (href === "/") return norm(cleanPath) === "";
+  return norm(cleanPath) === norm(href);
 }
 
 export default function TopNav({
@@ -74,7 +79,7 @@ export default function TopNav({
     <nav className="border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-black/60">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Link
-          href={withBasePath("/")}
+          href="/"
           onClick={() => resetHomeSearch()}
           className="text-sm font-semibold text-zinc-900 dark:text-zinc-50"
         >
@@ -88,7 +93,7 @@ export default function TopNav({
               return (
                 <Link
                   key={l.href}
-                  href={withBasePath(l.href)}
+                  href={l.href}
                   onClick={() => {
                     if (l.href === "/") resetHomeSearch();
                   }}
@@ -151,7 +156,7 @@ export default function TopNav({
                 return (
                   <Link
                     key={l.href}
-                    href={withBasePath(l.href)}
+                    href={l.href}
                     onClick={() => {
                       setOpen(false);
                       if (l.href === "/") resetHomeSearch();

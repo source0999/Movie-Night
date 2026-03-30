@@ -32,7 +32,7 @@ At minimum, set:
 - `TMDB_API_KEY`
 - `NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN`
 
-Note: the Firebase config is currently in `src/lib/firebase.ts`. If you want to manage Firebase config via environment variables instead, update that file accordingly.
+Note: the Firebase config is loaded from environment variables in `src/lib/firebase.ts` (the `NEXT_PUBLIC_FIREBASE_*` values).
 
 ### 4) Run the dev server
 ```bash

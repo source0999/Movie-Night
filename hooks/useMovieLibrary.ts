@@ -29,10 +29,21 @@ export function useMovieLibrary() {
   const dbRef = useRef<Firestore | null>(null);
 
   useEffect(() => {
+    // Ensure Firebase init + listener setup happen only in the browser.
+    // Also prevent infinite loading if Firestore listeners never resolve.
+    let cancelled = false;
     let watchlistLoaded = false;
     let watchedLoaded = false;
     let watchlist: LibraryMovie[] = [];
     let watched: LibraryMovie[] = [];
+    let didHydrate = false;
+
+    const forceHydrate = () => {
+      if (didHydrate || cancelled) return;
+      didHydrate = true;
+      setLibrary({ watchlist, watched });
+      setHydrated(true);
+    };
 
     const normalizeMovie = (d: unknown): LibraryMovie | null => {
       const obj = d as Record<string, unknown>;
@@ -102,11 +113,7 @@ export function useMovieLibrary() {
 
     const maybeHydrate = () => {
       if (!watchlistLoaded || !watchedLoaded) return;
-      setLibrary({
-        watchlist,
-        watched,
-      });
-      setHydrated(true);
+      forceHydrate();
     };
 
     const run = async () => {
@@ -129,6 +136,7 @@ export function useMovieLibrary() {
         const unsubWatchlist = onSnapshot(
           watchlistQ,
           (snap) => {
+            if (cancelled) return;
             watchlist = snap.docs
               .map((docSnap) => normalizeMovie(docSnap.data()))
               .filter((m): m is LibraryMovie => !!m);
@@ -136,6 +144,7 @@ export function useMovieLibrary() {
             maybeHydrate();
           },
           (err) => {
+            if (cancelled) return;
             console.error("Firestore watchlist listener error", err);
             watchlist = [];
             watchlistLoaded = true;
@@ -146,6 +155,7 @@ export function useMovieLibrary() {
         const unsubWatched = onSnapshot(
           watchedQ,
           (snap) => {
+            if (cancelled) return;
             watched = snap.docs
               .map((docSnap) => normalizeMovie(docSnap.data()))
               .filter((m): m is LibraryMovie => !!m);
@@ -153,6 +163,7 @@ export function useMovieLibrary() {
             maybeHydrate();
           },
           (err) => {
+            if (cancelled) return;
             console.error("Firestore watched listener error", err);
             watched = [];
             watchedLoaded = true;
@@ -166,11 +177,13 @@ export function useMovieLibrary() {
         };
       } catch (err) {
         console.error("Firestore init failed", err);
-        watchlistLoaded = true;
-        watchedLoaded = true;
-        watchlist = [];
-        watched = [];
-        maybeHydrate();
+        if (!cancelled) {
+          watchlistLoaded = true;
+          watchedLoaded = true;
+          watchlist = [];
+          watched = [];
+          forceHydrate();
+        }
         return () => {};
       }
     };
@@ -180,7 +193,17 @@ export function useMovieLibrary() {
       cleanup = c ?? undefined;
     });
 
+    // Fail-safe: if listeners can't attach (e.g. invalid API key),
+    // don't leave the UI stuck forever.
+    const timeoutId = window.setTimeout(() => {
+      watchlistLoaded = true;
+      watchedLoaded = true;
+      forceHydrate();
+    }, 10_000);
+
     return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
       cleanup?.();
     };
   }, []);

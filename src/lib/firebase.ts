@@ -2,27 +2,27 @@ import { initializeApp, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getAuth, type Auth } from "firebase/auth";
 
-// Firebase config
-// NOTE: This file contains your Firebase project configuration.
-// Keep any secrets (if you add them later) out of client bundles.
-const firebaseConfig = {
-  apiKey:
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY ??
-    "AIzaSyDIJcyzecSBg7_6L-0sv1sL8KcR-pz2txI",
-  authDomain:
-    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ??
-    "movie-night-d674f.firebaseapp.com",
-  projectId:
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "movie-night-d674f",
-  storageBucket:
-    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
-    "movie-night-d674f.firebasestorage.app",
-  messagingSenderId:
-    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "40227626644",
-  appId:
-    process.env.NEXT_PUBLIC_FIREBASE_APP_ID ??
-    "1:40227626644:web:db5494a4aac870f8dd5e81",
-};
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable: ${name}. ` +
+        `Make sure it's set in .env.local and in GitHub Actions secrets.`,
+    );
+  }
+  return value;
+}
+
+function getFirebaseConfig() {
+  return {
+    apiKey: requiredEnv("NEXT_PUBLIC_FIREBASE_API_KEY"),
+    authDomain: requiredEnv("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"),
+    projectId: requiredEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID"),
+    storageBucket: requiredEnv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"),
+    messagingSenderId: requiredEnv("NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"),
+    appId: requiredEnv("NEXT_PUBLIC_FIREBASE_APP_ID"),
+  };
+}
 
 let firebaseApp: FirebaseApp | null = null;
 let firestoreDb: Firestore | null = null;
@@ -33,7 +33,7 @@ function ensureInitialized() {
     return { db: firestoreDb, auth: firebaseAuth };
   }
 
-  firebaseApp = initializeApp(firebaseConfig);
+  firebaseApp = initializeApp(getFirebaseConfig());
   firestoreDb = getFirestore(firebaseApp);
   firebaseAuth = getAuth(firebaseApp);
 
