@@ -247,7 +247,7 @@ export default function Home() {
           ) : null}
 
           {!loading ? (
-            <div className="mt-6 grid gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 lg:grid-cols-4 xl:grid-cols-5">
               <AnimatePresence initial={false}>
                 {movies.map((movie, idx) => {
                 const year = releaseYear(movie.release_date);
@@ -350,7 +350,7 @@ export default function Home() {
               No movies in Watched yet.
             </div>
           ) : (
-            <div className="mt-6 grid gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 scrollbar-hide md:grid md:gap-6 md:overflow-visible md:snap-none md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               <AnimatePresence initial={false}>
                 {library.watched
                   .slice()
@@ -370,6 +370,7 @@ export default function Home() {
                   return (
                     <motion.div
                       key={movie.id}
+                      className="w-[46vw] min-w-[160px] max-w-[220px] shrink-0 snap-start md:w-auto md:min-w-0 md:max-w-none md:shrink"
                       initial={{ opacity: 0, scale: 0.97 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.98 }}
@@ -496,7 +497,7 @@ export default function Home() {
               Nothing in your Watchlist yet.
             </div>
           ) : (
-            <div className="mt-6 grid gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 scrollbar-hide md:grid md:gap-6 md:overflow-visible md:snap-none md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {library.watchlist
                 .slice()
                 .reverse()
@@ -507,8 +508,11 @@ export default function Home() {
                     : null;
 
                   return (
-                    <article
+                    <div
                       key={movie.id}
+                      className="w-[46vw] min-w-[160px] max-w-[220px] shrink-0 snap-start md:w-auto md:min-w-0 md:max-w-none md:shrink"
+                    >
+                      <article
                       className={`movie-card relative flex flex-col overflow-visible ${
                         deletingIds[movie.id]
                           ? "is-deleting"
@@ -577,7 +581,8 @@ export default function Home() {
                           </p>
                         </div>
                       </div>
-                    </article>
+                      </article>
+                    </div>
                   );
                 })}
             </div>

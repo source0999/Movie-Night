@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Inter, Orbitron } from "next/font/google";
 import "./globals.css";
 import AuthGate from "../components/AuthGate";
@@ -25,6 +25,12 @@ export const metadata: Metadata = {
     // Must include basePath so it resolves from sub-pages on GitHub Pages.
     icon: "/Movie-Night/favicon.svg",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({

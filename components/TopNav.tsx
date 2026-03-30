@@ -127,7 +127,7 @@ export default function TopNav({
                 <button
                   type="button"
                   onClick={() => onLogout?.()}
-                  className="min-h-[44px] rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/20 dark:text-zinc-50 dark:hover:bg-zinc-900/35"
+                  className="hidden min-h-[44px] rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/20 dark:text-zinc-50 dark:hover:bg-zinc-900/35 md:inline-flex"
                 >
                   Logout
                 </button>
@@ -198,6 +198,18 @@ export default function TopNav({
                   </Link>
                 );
               })}
+              {user ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onLogout?.();
+                  }}
+                  className="min-h-[44px] rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/20 dark:text-zinc-50 dark:hover:bg-zinc-900/35"
+                >
+                  Logout
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

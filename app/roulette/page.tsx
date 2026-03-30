@@ -58,13 +58,17 @@ export default function RoulettePage() {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-6">
-            <SpinningWheel
-              movies={watchlist}
-              onWinner={(w) => {
-                setWinner(w);
-                setConfettiKey((k) => k + 1);
-              }}
-            />
+            <div className="w-full max-w-full overflow-hidden">
+              <div className="origin-top scale-75 sm:scale-90 md:scale-100">
+                <SpinningWheel
+                  movies={watchlist}
+                  onWinner={(w) => {
+                    setWinner(w);
+                    setConfettiKey((k) => k + 1);
+                  }}
+                />
+              </div>
+            </div>
             {!canSpin ? null : null}
           </div>
         )}

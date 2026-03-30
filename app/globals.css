@@ -181,3 +181,12 @@ h6 {
     inset 0 0 0 1px rgba(168, 85, 247, 0.18),
     inset 0 0 14px rgba(107, 33, 168, 0.14);
 }
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
