@@ -2,8 +2,7 @@ import { initializeApp, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getAuth, type Auth } from "firebase/auth";
 
-function requiredEnv(name: string): string {
-  const value = process.env[name];
+function requiredEnv(value: string | undefined, name: string): string {
   if (!value) {
     throw new Error(
       `Missing required environment variable: ${name}. ` +
@@ -14,13 +13,39 @@ function requiredEnv(name: string): string {
 }
 
 function getFirebaseConfig() {
+  // Use explicit env var references so Next can inline them into the client bundle.
+  const apiKey = requiredEnv(
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    "NEXT_PUBLIC_FIREBASE_API_KEY",
+  );
+  const authDomain = requiredEnv(
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+  );
+  const projectId = requiredEnv(
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+  );
+  const storageBucket = requiredEnv(
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
+  );
+  const messagingSenderId = requiredEnv(
+    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+  );
+  const appId = requiredEnv(
+    process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    "NEXT_PUBLIC_FIREBASE_APP_ID",
+  );
+
   return {
-    apiKey: requiredEnv("NEXT_PUBLIC_FIREBASE_API_KEY"),
-    authDomain: requiredEnv("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"),
-    projectId: requiredEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID"),
-    storageBucket: requiredEnv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"),
-    messagingSenderId: requiredEnv("NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"),
-    appId: requiredEnv("NEXT_PUBLIC_FIREBASE_APP_ID"),
+    apiKey,
+    authDomain,
+    projectId,
+    storageBucket,
+    messagingSenderId,
+    appId,
   };
 }
 
