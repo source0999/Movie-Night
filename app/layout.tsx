@@ -20,10 +20,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Movie Night",
-  description: "Search TMDB and pick a movie for tonight.",
+  description: "Search the movie database and pick something for tonight.",
   icons: {
-    // Must include basePath so it resolves from sub-pages on GitHub Pages.
-    icon: "/Movie-Night/favicon.svg",
+    // Next prefixes with basePath automatically when basePath is set (production export).
+    icon: "/favicon.svg",
   },
 };
 

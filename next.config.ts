@@ -1,13 +1,18 @@
 import type { NextConfig } from "next";
 
+const isProdBuild = process.env.NODE_ENV === "production";
+
 const nextConfig: NextConfig = {
   output: "export",
-  // GitHub Pages repo URL subpath: https://<user>.github.io/Movie-Night/
-  basePath: "/Movie-Night",
-  assetPrefix: "/Movie-Night/",
-  // GitHub Pages serves directories with trailing slashes better.
+  // GitHub Pages uses /Movie-Night — only apply in production builds so `next dev`
+  // serves from http://localhost:3000/ (no 404 on /).
+  ...(isProdBuild
+    ? {
+        basePath: "/Movie-Night",
+        assetPrefix: "/Movie-Night/",
+      }
+    : {}),
   trailingSlash: true,
-  // GitHub Pages static-only; disable Next.js image optimization.
   images: { unoptimized: true },
 };
 

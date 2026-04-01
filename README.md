@@ -1,11 +1,11 @@
 # Black Box: Movie Night
 
-Black Box: Movie Night is a small movie-night web app designed for three friends: **Britton**, **Nabi**, and **Alex**. Search movies via TMDB, save picks to your Watchlist or mark them as Watched, and then spin a high-tech Roulette wheel to choose tonight’s option.
+Black Box: Movie Night is a small movie-night web app designed for three friends: **Britton**, **Nabi**, and **Alex**. Search movies via the movie database, save picks to your Watchlist or mark them as Watched, and then spin the roulette to choose tonight’s option.
 
 The app supports individual ratings for the group and displays consistent “Recommended by” info for everyone.
 
 ## Features
-- **TMDB integration** (in-browser search + movie details using TMDB read access token)
+- **Movie database** (in-browser search + details using a read access token)
 - **Firebase Firestore real-time database** for a shared Watchlist / Watched library
 - **Login/auth (3 users)** with persisted sessions in the browser
 - **Roulette wheel** with confetti and glitch-style winner celebration
@@ -14,7 +14,7 @@ The app supports individual ratings for the group and displays consistent “Rec
 
 ### 1) Prerequisites
 - Node.js 18+ (Node 20 recommended)
-- A TMDB read access token (for in-browser search/details)
+- A movie database read access token (for in-browser search/details)
 - A Firebase project (Firestore enabled)
 
 ### 2) Install dependencies
@@ -67,7 +67,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 This site is hosted on **GitHub Pages** using the `master` branch.
 
 ### GitHub Actions Secrets
-To allow the GitHub Action workflow to build successfully (Firestore + in-browser TMDB), set these repository secrets:
+To allow the GitHub Action workflow to build successfully (Firestore + in-browser movie database), set these repository secrets:
 - `NEXT_PUBLIC_FIREBASE_API_KEY`
 - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
 - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
@@ -75,12 +75,12 @@ To allow the GitHub Action workflow to build successfully (Firestore + in-browse
 - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 
-### TMDB Token
+### Movie database token
 - `NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN`
 
 These values are required because the app uses:
 - **Firebase Firestore** for the shared Watchlist / Watched data
-- **TMDB** directly in the browser for search/details
+- The **movie database API** directly in the browser for search/details
 
 ## Visuals
 

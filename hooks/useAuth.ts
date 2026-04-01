@@ -60,8 +60,17 @@ export function useAuth(): AuthState {
       setHydrated(true);
     };
     void run();
+
+    // Never block the app indefinitely if the effect stalls (extensions, rare runtimes).
+    const failSafe = window.setTimeout(() => {
+      if (cancelled) return;
+      setUser((prev) => prev ?? safeReadUser());
+      setHydrated(true);
+    }, 2500);
+
     return () => {
       cancelled = true;
+      window.clearTimeout(failSafe);
     };
   }, []);
 

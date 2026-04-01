@@ -154,7 +154,7 @@ h6 {
 
 .movie-card:hover {
   transform: translateY(-5px);
-  z-index: 50; /* ensure dropdowns/overlaps render above neighbors on hover */
+  z-index: 10; /* above sibling cards only; nav/modals use higher layers */
   box-shadow:
     0 0 0 1px rgba(168, 85, 247, 0.35),
     0 0 26px rgba(168, 85, 247, 0.28);

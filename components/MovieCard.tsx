@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { LibraryMovie } from "../lib/movieLibrary";
+import type { LibraryItem } from "../lib/movieLibrary";
 
 export default function MovieCard({
   movie,
@@ -15,7 +15,7 @@ export default function MovieCard({
   infoNode,
   actionsNode,
 }: {
-  movie: LibraryMovie;
+  movie: LibraryItem;
   year: string | null;
   posterSrc: string | null;
   isSearch: boolean;

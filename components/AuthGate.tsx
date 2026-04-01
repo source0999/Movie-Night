@@ -10,7 +10,18 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
   if (!hydrated) {
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-black" aria-busy="true" />
+      <div
+        className="flex min-h-screen flex-col items-center justify-center gap-3 bg-zinc-50 px-4 text-center dark:bg-black"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+          Syncing…
+        </p>
+        <p className="max-w-sm text-xs text-zinc-500 dark:text-zinc-500">
+          If this stays for more than a few seconds, refresh the page or check your connection.
+        </p>
+      </div>
     );
   }
 
@@ -21,7 +32,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   return (
     <>
       <TopNav user={user} onLogout={logout} />
-      {children}
+      <main className="relative z-0 min-h-0 flex-1">{children}</main>
     </>
   );
 }

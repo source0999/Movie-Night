@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { tmdbGetMovieDetails } from "../src/lib/tmdbClient";
+import { tmdbGetMovieDetails, tmdbGetTvDetails } from "../src/lib/tmdbClient";
 
-type MovieDetails = {
+type MediaDetails = {
   id: number;
   title: string;
   release_date: string | null;
   poster_path: string | null;
   overview: string | null;
+  genre_ids?: number[];
 };
 
 function releaseYear(releaseDate: string | null) {
@@ -20,6 +21,7 @@ function isMissingApiKeyError(message: string | null) {
   if (!message) return false;
   const lower = message.toLowerCase();
   return (
+    lower.includes("movie database authentication is missing") ||
     lower.includes("tmdb api key is missing") ||
     lower.includes("tmdb read access token is missing")
   );
@@ -27,34 +29,38 @@ function isMissingApiKeyError(message: string | null) {
 
 export default function MovieDetailsModal({
   open,
-  movieId,
+  mediaType,
+  tmdbId,
   onClose,
 }: {
   open: boolean;
-  movieId: number | null;
+  mediaType: "movie" | "tv" | null;
+  tmdbId: number | null;
   onClose: () => void;
 }) {
-  const [movie, setMovie] = useState<MovieDetails | null>(null);
+  const [media, setMedia] = useState<MediaDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !movieId) return;
+    if (!open || !tmdbId || !mediaType) return;
 
     let cancelled = false;
 
     const run = async () => {
-      // Defer state updates to avoid eslint "set-state-in-effect" warnings.
       await Promise.resolve();
       if (cancelled) return;
 
       setLoading(true);
       setError(null);
-      setMovie(null);
+      setMedia(null);
 
       try {
-        const data = await tmdbGetMovieDetails(movieId);
-        if (!cancelled) setMovie(data);
+        const data =
+          mediaType === "tv"
+            ? await tmdbGetTvDetails(tmdbId)
+            : await tmdbGetMovieDetails(tmdbId);
+        if (!cancelled) setMedia(data);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -67,7 +73,7 @@ export default function MovieDetailsModal({
     return () => {
       cancelled = true;
     };
-  }, [open, movieId]);
+  }, [open, tmdbId, mediaType]);
 
   useEffect(() => {
     if (!open) return;
@@ -87,11 +93,18 @@ export default function MovieDetailsModal({
 
   if (!open) return null;
 
-  const year = releaseYear(movie?.release_date ?? null);
+  const year = releaseYear(media?.release_date ?? null);
   const missingKey = isMissingApiKeyError(error);
-  const posterSrc = movie?.poster_path
-    ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+  const posterSrc = media?.poster_path
+    ? `https://image.tmdb.org/t/p/w500${media.poster_path}`
     : null;
+
+  const heading =
+    mediaType === "tv"
+      ? "TV details"
+      : mediaType === "movie"
+        ? "Movie details"
+        : "Details";
 
   return (
     <div
@@ -109,7 +122,7 @@ export default function MovieDetailsModal({
         <div className="flex items-start justify-between gap-4 border-b border-zinc-200 p-4 dark:border-zinc-800">
           <div>
             <h2 className="text-lg font-semibold leading-6">
-              {movie?.title || "Movie details"}
+              {media?.title || heading}
               {year ? (
                 <span className="ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400">
                   ({year})
@@ -117,7 +130,7 @@ export default function MovieDetailsModal({
               ) : null}
             </h2>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              {loading ? "Loading..." : error ? error : "Plot summary"}
+              {loading ? "Fetching…" : error ? error : "Plot summary"}
             </p>
           </div>
 
@@ -133,10 +146,9 @@ export default function MovieDetailsModal({
         <div className="grid gap-4 p-4 md:grid-cols-[180px_1fr]">
           <div className="aspect-[2/3] w-full overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
             {posterSrc ? (
-              // Using <img> to keep config simple for TMDB remote images.
               <img
                 src={posterSrc}
-                alt={movie?.title ? `${movie.title} poster` : "Poster"}
+                alt={media?.title ? `${media.title} poster` : "Poster"}
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -147,6 +159,12 @@ export default function MovieDetailsModal({
           </div>
 
           <div>
+            {!tmdbId || !mediaType ? (
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                No database details for this item.
+              </p>
+            ) : null}
+
             {error ? (
               <div
                 className={`rounded-lg border p-3 text-sm ${
@@ -161,21 +179,20 @@ export default function MovieDetailsModal({
 
             {loading ? (
               <div className="text-sm text-zinc-600 dark:text-zinc-300">
-                Fetching plot summary...
+                Fetching plot summary…
               </div>
-            ) : movie?.overview ? (
+            ) : media?.overview ? (
               <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-200">
-                {movie.overview}
+                {media.overview}
               </p>
-            ) : (
+            ) : tmdbId && mediaType ? (
               <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
                 No plot summary available.
               </p>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
     </div>
   );
 }
-

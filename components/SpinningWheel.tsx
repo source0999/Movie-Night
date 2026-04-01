@@ -1,25 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { LibraryMovie } from "../lib/movieLibrary";
-
-function polarToCartesian({
-  cx,
-  cy,
-  radius,
-  angleDeg,
-}: {
-  cx: number;
-  cy: number;
-  radius: number;
-  angleDeg: number;
-}) {
-  const angleRad = (Math.PI / 180) * angleDeg;
-  return {
-    x: cx + radius * Math.cos(angleRad),
-    y: cy + radius * Math.sin(angleRad),
-  };
-}
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  libraryItemCoverImageUrl,
+  type LibraryItem,
+} from "../lib/movieLibrary";
 
 function clampText(s: string, maxChars: number) {
   const trimmed = s.trim();
@@ -27,332 +12,275 @@ function clampText(s: string, maxChars: number) {
   return trimmed.slice(0, Math.max(0, maxChars - 1)) + "…";
 }
 
-const COLORS = [
-  "fill-rose-100 dark:fill-rose-900",
-  "fill-emerald-100 dark:fill-emerald-900",
-  "fill-sky-100 dark:fill-sky-900",
-  "fill-amber-100 dark:fill-amber-900",
-  "fill-violet-100 dark:fill-violet-900",
-  "fill-lime-100 dark:fill-lime-900",
-];
+function useSpinClickSound(spinning: boolean, durationMs: number) {
+  const ctxRef = useRef<AudioContext | null>(null);
 
-export default function SpinningWheel({
-  movies,
-  onWinner,
-}: {
-  movies: LibraryMovie[];
-  onWinner: (winner: LibraryMovie) => void;
-}) {
-  const [rotationDeg, setRotationDeg] = useState(0);
-  const [spinning, setSpinning] = useState(false);
-  const [activeWinner, setActiveWinner] = useState<LibraryMovie | null>(null);
-  const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
-  const [spinDurationMs, setSpinDurationMs] = useState(4000);
-
-  const timeoutRef = useRef<number | null>(null);
-
-  const segmentCount = movies.length;
-  const anglePerSegment = segmentCount > 0 ? 360 / segmentCount : 0;
-
-  const wheelSize = 320;
-  const cx = wheelSize / 2;
-  const cy = wheelSize / 2;
-  const outerRadius = wheelSize * 0.46;
-  const innerRadius = wheelSize * 0.08;
-  const textRadius = wheelSize * 0.33;
-
-  const truncatedTitles = useMemo(() => {
-    return movies.map((m) => clampText(m.title, 18));
-  }, [movies]);
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
-    };
+  const playTick = useCallback(() => {
+    let ctx = ctxRef.current;
+    if (!ctx) {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      ctx = new Ctx();
+      ctxRef.current = ctx;
+    }
+    void ctx.resume().catch(() => {});
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(1100, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.07, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.04);
   }, []);
 
-  function computeFinalRotation({
-    winnerIndex,
-    extraTurns,
-    currentRotationDeg,
-  }: {
-    winnerIndex: number;
-    extraTurns: number;
-    currentRotationDeg: number;
-  }) {
-    // We draw segments starting at -90 degrees (top). Segment i is centered at:
-    // centerAngle = -90 + i*anglePer + anglePer/2.
-    // We want winner center to land on pointer at -90 after rotation.
-    const targetWithin = (() => {
-      const desired = -(
-        (winnerIndex + 0.5) * anglePerSegment
-      ); /* modulo will normalize */;
-      const mod = ((desired % 360) + 360) % 360;
-      return mod;
-    })();
+  useEffect(() => {
+    if (!spinning) return;
+    const start = performance.now();
+    let raf = 0;
+    let lastTick = start;
 
-    const currentMod = ((currentRotationDeg % 360) + 360) % 360;
-    let delta = targetWithin - currentMod;
-    if (delta < 0) delta += 360;
+    const loop = () => {
+      const elapsed = performance.now() - start;
+      if (elapsed >= durationMs) return;
+      const progress = elapsed / durationMs;
+      const minGap = 42;
+      const maxGap = 340;
+      const gap = minGap + (maxGap - minGap) * (progress * progress);
+      if (performance.now() - lastTick >= gap) {
+        playTick();
+        lastTick = performance.now();
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [spinning, durationMs, playTick]);
+}
 
-    return currentRotationDeg + extraTurns * 360 + delta;
-  }
+type Phase = "idle" | "spinning" | "spotlight";
 
-  const canSpin = segmentCount >= 2 && !spinning;
-
-  function onSpin() {
-    if (!canSpin) return;
-
-    setSpinning(true);
-    setActiveWinner(null);
-    setWinnerIndex(null);
-
-    const winnerIndex = Math.floor(Math.random() * segmentCount);
-    const winner = movies[winnerIndex];
-    setActiveWinner(winner);
-    setWinnerIndex(winnerIndex);
-
-    const extraTurns = 4 + Math.floor(Math.random() * 3); // 4-6 turns
-    const durationMs = 3000 + Math.floor(Math.random() * 2000); // 3-5s
-    setSpinDurationMs(durationMs);
-
-    const finalRotation = computeFinalRotation({
-      winnerIndex,
-      extraTurns,
-      currentRotationDeg: rotationDeg,
-    });
-
-    setRotationDeg(finalRotation);
-
-    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
-    timeoutRef.current = window.setTimeout(() => {
-      onWinner(winner);
-      setSpinning(false);
-    }, durationMs);
-  }
-
+function RoulettePosterCard({
+  item,
+  spotlight,
+  unframed = false,
+  className = "",
+}: {
+  item: LibraryItem | null | undefined;
+  spotlight?: boolean;
+  /** No outer border/radius (e.g. embedded in a bordered parent). */
+  unframed?: boolean;
+  className?: string;
+}) {
+  const src = libraryItemCoverImageUrl(item);
+  const frame =
+    unframed
+      ? "rounded-none border-0 shadow-none"
+      : "rounded-2xl border-2 border-zinc-200 bg-zinc-200 shadow-xl dark:border-zinc-700 dark:bg-zinc-800";
   return (
-    <div className="flex flex-col items-center gap-5">
-      <div className="relative">
-        {/* Pointer */}
-        <div className="absolute left-1/2 top-[-6px] z-20 -translate-x-1/2">
-          <div className="h-0 w-0 border-x-[14px] border-x-transparent border-b-[24px] border-b-zinc-900 dark:border-b-white" />
+    <div
+      className={`relative aspect-[2/3] overflow-hidden bg-zinc-200 transition dark:bg-zinc-800 ${frame} ${spotlight && !unframed ? "border-cyan-400 shadow-[0_0_36px_rgba(34,211,238,0.45)] dark:border-cyan-400" : ""} ${spotlight && unframed ? "ring-2 ring-cyan-400 ring-inset" : ""} ${className}`}
+    >
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+          draggable={false}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-900/50 to-zinc-800 p-3 text-center text-sm font-bold text-zinc-100">
+          {item ? clampText(item.title, 24) : "—"}
         </div>
-
-        <div
-          className="transition-transform ease-out"
-          style={{
-            transform: `rotate(${rotationDeg}deg)`,
-            transitionDuration: spinning ? `${spinDurationMs}ms` : "300ms",
-          }}
-        >
-          <svg
-            width={wheelSize}
-            height={wheelSize}
-            viewBox={`0 0 ${wheelSize} ${wheelSize}`}
-            className="block"
-          >
-            <defs>
-              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow
-                  dx="0"
-                  dy="3"
-                  stdDeviation="4"
-                  floodColor="#000"
-                  floodOpacity="0.25"
-                />
-              </filter>
-
-              <linearGradient id="holoMetal" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#6b21a8" stopOpacity="0.75" />
-                <stop offset="35%" stopColor="#22d3ee" stopOpacity="0.65" />
-                <stop offset="70%" stopColor="#a78bfa" stopOpacity="0.6" />
-                <stop offset="100%" stopColor="#f0abfc" stopOpacity="0.45" />
-              </linearGradient>
-
-              <linearGradient id="neonRing" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.95" />
-                <stop offset="50%" stopColor="#6b21a8" stopOpacity="0.95" />
-                <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.85" />
-              </linearGradient>
-
-              <filter id="ringGlow" x="-30%" y="-30%" width="160%" height="160%">
-                <feDropShadow
-                  dx="0"
-                  dy="0"
-                  stdDeviation="6"
-                  floodColor="#22d3ee"
-                  floodOpacity="0.35"
-                />
-                <feDropShadow
-                  dx="0"
-                  dy="0"
-                  stdDeviation="10"
-                  floodColor="#6b21a8"
-                  floodOpacity="0.25"
-                />
-              </filter>
-            </defs>
-
-            <g filter="url(#shadow)">
-              {/* Outer neon metallic ring */}
-              <circle
-                cx={cx}
-                cy={cy}
-                r={outerRadius * 1.07}
-                fill="none"
-                stroke="url(#neonRing)"
-                strokeWidth={10}
-                filter="url(#ringGlow)"
-                opacity={spinning ? 0.95 : 0.8}
-              />
-
-              {movies.map((movie, i) => {
-                const startAngle = -90 + i * anglePerSegment;
-                const endAngle = startAngle + anglePerSegment;
-
-                const p1 = polarToCartesian({
-                  cx,
-                  cy,
-                  radius: outerRadius,
-                  angleDeg: startAngle,
-                });
-                const p2 = polarToCartesian({
-                  cx,
-                  cy,
-                  radius: outerRadius,
-                  angleDeg: endAngle,
-                });
-                const p3 = polarToCartesian({
-                  cx,
-                  cy,
-                  radius: innerRadius,
-                  angleDeg: endAngle,
-                });
-                const p4 = polarToCartesian({
-                  cx,
-                  cy,
-                  radius: innerRadius,
-                  angleDeg: startAngle,
-                });
-
-                const largeArc = anglePerSegment > 180 ? 1 : 0;
-
-                const d = [
-                  `M ${p1.x} ${p1.y}`,
-                  `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${p2.x} ${p2.y}`,
-                  `L ${p3.x} ${p3.y}`,
-                  `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${p4.x} ${p4.y}`,
-                  "Z",
-                ].join(" ");
-
-                const midAngle = startAngle + anglePerSegment / 2;
-                const labelPoint = polarToCartesian({
-                  cx,
-                  cy,
-                  radius: textRadius,
-                  angleDeg: midAngle,
-                });
-
-                return (
-                  <g key={movie.id}>
-                    <path
-                      d={d}
-                      className={COLORS[i % COLORS.length]}
-                      stroke="rgba(0,0,0,0.08)"
-                      strokeWidth="1"
-                    />
-                    {/* Holographic overlay to add metallic texture */}
-                    <path d={d} fill="url(#holoMetal)" opacity="0.35" style={{ mixBlendMode: "screen" }} />
-
-                    <text
-                      x={labelPoint.x}
-                      y={labelPoint.y}
-                      transform={`rotate(${midAngle + 90} ${labelPoint.x} ${labelPoint.y})`}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      className="select-none fill-zinc-900 dark:fill-zinc-900"
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        filter: spinning ? "blur(0.9px)" : "none",
-                        opacity: spinning ? 0.92 : 1,
-                      }}
-                    >
-                      {/* Winner: add subtle digital glitch flicker */}
-                      {truncatedTitles[i]}
-                    </text>
-
-                    {winnerIndex === i && !spinning ? (
-                      <>
-                        <text
-                          x={labelPoint.x}
-                          y={labelPoint.y}
-                          transform={`rotate(${midAngle + 90} ${labelPoint.x} ${labelPoint.y})`}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="select-none fill-cyan-300 opacity-85 wheel-glitch"
-                          style={{ fontSize: 12, fontWeight: 700, mixBlendMode: "screen" }}
-                        >
-                          {truncatedTitles[i]}
-                        </text>
-                        <text
-                          x={labelPoint.x}
-                          y={labelPoint.y}
-                          transform={`rotate(${midAngle + 90} ${labelPoint.x} ${labelPoint.y})`}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="select-none fill-violet-300 opacity-70 wheel-glitch"
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            mixBlendMode: "screen",
-                            animationDelay: "40ms",
-                          }}
-                        >
-                          {truncatedTitles[i]}
-                        </text>
-                      </>
-                    ) : null}
-                  </g>
-                );
-              })}
-            </g>
-
-            {/* center cap */}
-            <circle
-              cx={cx}
-              cy={cy}
-              r={innerRadius * 1.2}
-              className="fill-zinc-900 dark:fill-white"
-            />
-            <circle
-              cx={cx}
-              cy={cy}
-              r={innerRadius * 0.55}
-              className="fill-zinc-200 dark:fill-zinc-900"
-            />
-          </svg>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={onSpin}
-          disabled={!canSpin}
-          className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
-        >
-          {spinning ? "Spinning..." : "Spin"}
-        </button>
-
-        {activeWinner ? (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Landing on a random choice...
-          </p>
-        ) : null}
-      </div>
+      )}
     </div>
   );
 }
 
+const SPIN_BTN =
+  "min-h-[52px] w-full max-w-xs rounded-2xl px-8 text-base font-bold shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 dark:focus-visible:ring-offset-zinc-900";
+
+/** Slot-machine style picker when the wheel would be too crowded. */
+export function ListShufflePicker({
+  slots,
+  onWinner,
+}: {
+  slots: LibraryItem[];
+  onWinner: (winner: LibraryItem) => void;
+}) {
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [displayIndex, setDisplayIndex] = useState(0);
+  const [winnerIdx, setWinnerIdx] = useState<number | null>(null);
+  const [totalMs, setTotalMs] = useState(3200);
+
+  useSpinClickSound(phase === "spinning", totalMs);
+
+  const canSpin = slots.length >= 2 && phase === "idle";
+  const segmentCount = slots.length;
+
+  const onSpin = () => {
+    if (!canSpin) return;
+    const wIdx = Math.floor(Math.random() * segmentCount);
+    const durationMs = 2800 + Math.floor(Math.random() * 900);
+    setTotalMs(durationMs);
+    setPhase("spinning");
+    setWinnerIdx(wIdx);
+    setDisplayIndex(Math.floor(Math.random() * segmentCount));
+
+    const start = performance.now();
+    let lastFrame = start;
+    const tick = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(1, elapsed / durationMs);
+      const minGap = 35;
+      const maxGap = 220;
+      const gap = minGap + (maxGap - minGap) * (progress * progress);
+      if (now - lastFrame >= gap) {
+        if (progress < 0.92) {
+          setDisplayIndex(
+            (i) => (i + 1 + Math.floor(Math.random() * 3)) % segmentCount,
+          );
+        } else {
+          setDisplayIndex(wIdx);
+        }
+        lastFrame = now;
+      }
+      if (elapsed < durationMs) {
+        requestAnimationFrame(tick);
+      } else {
+        setDisplayIndex(wIdx);
+        setPhase("spotlight");
+        window.setTimeout(() => {
+          onWinner(slots[wIdx]!);
+          setPhase("idle");
+          setWinnerIdx(null);
+        }, 1100);
+      }
+    };
+    requestAnimationFrame(tick);
+  };
+
+  const current =
+    slots[displayIndex] ??
+    slots[0] ??
+    slots.find(Boolean);
+  const isSpot = phase === "spotlight" && winnerIdx === displayIndex;
+  const bgSrc = libraryItemCoverImageUrl(current);
+
+  return (
+    <div className="flex w-full max-w-2xl flex-col items-center gap-8">
+      <div
+        className={`relative w-full overflow-hidden rounded-2xl border-2 text-center shadow-xl transition sm:flex sm:min-h-[min(360px,52vw)] sm:text-left ${
+          isSpot
+            ? "border-cyan-400 bg-zinc-900 shadow-[0_0_40px_rgba(34,211,238,0.35)]"
+            : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/70"
+        }`}
+      >
+        {phase === "spinning" || phase === "spotlight" ? (
+          <div
+            className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-300 ${
+              phase === "spotlight" ? "bg-black/45 opacity-100" : "opacity-0"
+            }`}
+          />
+        ) : null}
+
+        <div className="relative flex w-full flex-col sm:flex-row sm:items-stretch">
+          <div className="relative mx-auto aspect-[2/3] w-[min(280px,88vw)] shrink-0 sm:mx-0 sm:w-[48%] sm:max-w-[280px]">
+            <RoulettePosterCard
+              item={current}
+              spotlight={isSpot}
+              unframed
+              className="h-full w-full sm:rounded-l-xl"
+            />
+          </div>
+
+          <div className="relative flex flex-1 flex-col justify-center px-5 py-8 sm:py-6">
+            {bgSrc ? (
+              <div
+                className="pointer-events-none absolute inset-0 opacity-[0.18] dark:opacity-[0.22]"
+                aria-hidden
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={bgSrc}
+                  alt=""
+                  className="h-full w-full object-cover blur-2xl scale-110"
+                />
+              </div>
+            ) : null}
+
+            <p
+              className={`relative z-20 text-[10px] font-bold uppercase tracking-[0.2em] ${
+                isSpot ? "text-cyan-200/90" : "text-zinc-500 dark:text-zinc-400"
+              }`}
+            >
+              List shuffle
+            </p>
+            <p
+              className={`relative z-20 mt-3 min-h-[4.5rem] text-xl font-bold leading-tight sm:text-2xl ${
+                isSpot
+                  ? "text-white drop-shadow-[0_0_12px_rgba(34,211,238,0.5)]"
+                  : "text-zinc-900 dark:text-zinc-50"
+              }`}
+              style={{
+                fontFamily: "var(--font-orbitron), system-ui, sans-serif",
+              }}
+            >
+              {clampText(current?.title ?? "", 52)}
+            </p>
+            <p
+              className={`relative z-20 mt-3 text-xs ${
+                isSpot ? "text-zinc-300" : "text-zinc-500 dark:text-zinc-400"
+              }`}
+            >
+              {segmentCount} in the mix
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onSpin}
+        disabled={!canSpin}
+        className={`${SPIN_BTN} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-100`}
+      >
+        {phase === "spinning"
+          ? "Shuffling…"
+          : phase === "spotlight"
+            ? "…"
+            : "Spin"}
+      </button>
+    </div>
+  );
+}
+
+/** List shuffle only (wheel removed). */
+export default function SpinningWheel({
+  slots,
+  onWinner,
+}: {
+  slots: LibraryItem[];
+  onWinner: (winner: LibraryItem) => void;
+}) {
+  const cleanSlots = useMemo(
+    () =>
+      (Array.isArray(slots) ? slots : []).filter(
+        (s): s is LibraryItem => s != null && typeof s === "object",
+      ),
+    [slots],
+  );
+
+  if (cleanSlots.length < 2) {
+    return null;
+  }
+
+  return <ListShufflePicker slots={cleanSlots} onWinner={onWinner} />;
+}

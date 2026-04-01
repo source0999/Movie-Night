@@ -23,9 +23,12 @@ function rand(min: number, max: number) {
 export default function ConfettiBurst({
   active,
   durationMs = 1800,
+  intensity = "normal",
 }: {
   active: boolean;
   durationMs?: number;
+  /** Larger particle count and spread for major moments (e.g. roulette win). */
+  intensity?: "normal" | "celebration";
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -58,18 +61,22 @@ export default function ConfettiBurst({
     const colors = ["#A855F7", "#22D3EE", "#60A5FA", "#34D399", "#C084FC"];
 
     const particles: Particle[] = [];
-    const count = Math.floor(95 + Math.random() * 25);
+    const baseCount = intensity === "celebration" ? 220 : 95;
+    const countExtra = intensity === "celebration" ? 80 : 25;
+    const count = Math.floor(baseCount + Math.random() * countExtra);
+    const vxScale = intensity === "celebration" ? 1.6 : 1;
+    const vyScale = intensity === "celebration" ? 1.35 : 1;
 
     for (let i = 0; i < count; i++) {
       particles.push({
         x: window.innerWidth / 2,
-        y: window.innerHeight * 0.28,
-        vx: rand(-5, 5),
-        vy: rand(-8, -2),
+        y: window.innerHeight * (intensity === "celebration" ? 0.22 : 0.28),
+        vx: rand(-5, 5) * vxScale,
+        vy: rand(-8, -2) * vyScale,
         rotation: rand(0, Math.PI * 2),
         rotationSpeed: rand(-0.25, 0.25),
-        w: rand(6, 10),
-        h: rand(10, 16),
+        w: rand(intensity === "celebration" ? 7 : 6, intensity === "celebration" ? 12 : 10),
+        h: rand(intensity === "celebration" ? 12 : 10, intensity === "celebration" ? 20 : 16),
         color: colors[Math.floor(Math.random() * colors.length)],
         life: 0,
         maxLife: rand(durationMs * 0.6, durationMs),
@@ -116,7 +123,7 @@ export default function ConfettiBurst({
       if (rafRef.current) window.cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", onResize);
     };
-  }, [active, durationMs]);
+  }, [active, durationMs, intensity]);
 
   return (
     <canvas
