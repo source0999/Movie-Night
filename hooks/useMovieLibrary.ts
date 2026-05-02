@@ -13,6 +13,7 @@ import {
   type MediaLibrary,
 } from "../lib/movieLibrary";
 import { initFirebase } from "../src/lib/firebase";
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { tmdbGetMovieDetails, tmdbGetTvDetails } from "../src/lib/tmdbClient";
 import {
   collection,
@@ -146,8 +147,24 @@ export function useMovieLibrary() {
     const run = async () => {
       await Promise.resolve();
       try {
-        const { db } = initFirebase();
+        const { db, auth } = initFirebase();
         dbRef.current = db;
+
+        await new Promise<void>((resolve, reject) => {
+          const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (firebaseUser) {
+              unsub();
+              resolve();
+              return;
+            }
+            try {
+              await signInAnonymously(auth);
+            } catch (e) {
+              unsub();
+              reject(e);
+            }
+          });
+        });
 
         const moviesCollectionRef = collection(db, "movies");
 
