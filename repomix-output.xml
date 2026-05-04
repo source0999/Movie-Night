@@ -66,6 +66,7 @@ components/SaveMoviePromptModal.tsx
 components/SpinningWheel.tsx
 components/TmdbSearchExperience.tsx
 components/TopNav.tsx
+components/WatchlistCardRatingsRow.tsx
 components/WatchlistGroupControls.tsx
 eslint.config.mjs
 hooks/useAuth.ts
@@ -94,6 +95,63 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="components/WatchlistCardRatingsRow.tsx">
+"use client";
+
+import { getPersonWatchedRating, type LibraryItem } from "../lib/movieLibrary";
+import { normalizeSeenIt } from "../lib/watchlistGroup";
+
+function formatRatingSlot(hasSeen: boolean, value: number | null): string {
+  if (!hasSeen) return "—";
+  if (typeof value === "number" && value >= 1 && value <= 10) {
+    return String(value);
+  }
+  return "—";
+}
+
+/** Compact A/B/N scores on watchlist cards when someone has seen and rated. */
+export default function WatchlistCardRatingsRow({
+  item,
+  compact = false,
+}: {
+  item: LibraryItem;
+  /** Tighter padding on narrow home cards. */
+  compact?: boolean;
+}) {
+  const seen = normalizeSeenIt(item);
+  const a = getPersonWatchedRating(item, "alex");
+  const b = getPersonWatchedRating(item, "britton");
+  const n = getPersonWatchedRating(item, "nabi");
+
+  const showA = seen.alex && a !== null;
+  const showB = seen.britton && b !== null;
+  const showN = seen.nabi && n !== null;
+  if (!showA && !showB && !showN) return null;
+
+  const pad = compact ? "p-2 sm:p-2.5" : "p-2.5";
+
+  return (
+    <div
+      className={`rounded-xl border border-zinc-200/60 bg-zinc-50/90 ${pad} dark:border-zinc-700/60 dark:bg-zinc-900/50`}
+      aria-label="Ratings from people who have watched"
+    >
+      <p
+        className={`font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 ${compact ? "text-[9px]" : "text-[10px]"}`}
+      >
+        Ratings (1–10)
+      </p>
+      <p
+        className={`mt-1 font-semibold tabular-nums text-zinc-900 dark:text-zinc-100 ${compact ? "text-[11px] sm:text-xs" : "text-xs"}`}
+      >
+        A: {formatRatingSlot(seen.alex, a)}, B:{" "}
+        {formatRatingSlot(seen.britton, b)}, N:{" "}
+        {formatRatingSlot(seen.nabi, n)}
+      </p>
+    </div>
+  );
+}
+</file>
 
 <file path=".gitignore">
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
@@ -527,10 +585,16 @@ import { useMovieLibrary } from "../hooks/useMovieLibrary";
 import {
   categoryLabels,
   copyGenreIdsForPersist,
+  itemPlacementInLibrary,
   libraryItemFromTmdbHit,
+  mergeWatchedRatingPatch,
   type LibraryCategory,
   type LibraryItem,
 } from "../lib/movieLibrary";
+import {
+  seenPersonForMovieNightUser,
+  setSeenTrueForPerson,
+} from "../lib/watchlistGroup";
 import SaveMoviePromptModal from "./SaveMoviePromptModal";
 import MovieCard from "./MovieCard";
 import { useAuth } from "../hooks/useAuth";
@@ -545,6 +609,30 @@ const SAVE_OPTIONS: Array<{ value: LibraryCategory; label: string }> = [
   { value: "watchlist", label: categoryLabels.watchlist },
   { value: "watched", label: categoryLabels.watched },
 ];
+
+function shouldBlockDuplicateSave(
+  category: LibraryCategory,
+  placement: "watchlist" | "watched" | null,
+): boolean {
+  if (!placement) return false;
+  if (category === "watchlist" && placement === "watchlist") return true;
+  if (category === "watchlist" && placement === "watched") return true;
+  if (category === "watched" && placement === "watched") return true;
+  return false;
+}
+
+function messageForBlockedDuplicateSave(
+  category: LibraryCategory,
+  placement: "watchlist" | "watched" | null,
+): string {
+  if (category === "watchlist" && placement === "watchlist") {
+    return "This title is already on your Watchlist. Remove it there first if you want to add it again from search.";
+  }
+  if (category === "watchlist" && placement === "watched") {
+    return "This title is already in Watched. Use My Library → Watched to move it to your Watchlist if you want it there — it can’t be added again from search.";
+  }
+  return "This title is already in Watched. You can change it from My Library.";
+}
 
 function releaseYear(releaseDate: string | null) {
   if (!releaseDate) return null;
@@ -617,6 +705,8 @@ export default function TmdbSearchExperience() {
   const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [undoMessage, setUndoMessage] = useState<string | null>(null);
+  const [duplicateSaveOpen, setDuplicateSaveOpen] = useState(false);
+  const [duplicateSaveMessage, setDuplicateSaveMessage] = useState("");
   const deleteTimerRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
 
@@ -834,9 +924,8 @@ export default function TmdbSearchExperience() {
                   const posterSrc = movie.poster_path
                     ? `${posterBase}${movie.poster_path}`
                     : null;
-                  const isSaved = library.watchlist.some(
-                    (m) => m.docId === movie.docId,
-                  );
+                  const placement = itemPlacementInLibrary(library, movie);
+                  const isSaved = placement !== null;
 
                   return (
                     <motion.div
@@ -875,6 +964,20 @@ export default function TmdbSearchExperience() {
                               disabled={!hydrated}
                               align="left"
                               onSelect={(cat) => {
+                                const placement = itemPlacementInLibrary(
+                                  library,
+                                  movie,
+                                );
+                                if (shouldBlockDuplicateSave(cat, placement)) {
+                                  setDuplicateSaveMessage(
+                                    messageForBlockedDuplicateSave(
+                                      cat,
+                                      placement,
+                                    ),
+                                  );
+                                  setDuplicateSaveOpen(true);
+                                  return;
+                                }
                                 setSavePromptCategory(cat);
                                 setSavePromptMovie(movie);
                                 setSavePromptOpen(true);
@@ -917,6 +1020,8 @@ export default function TmdbSearchExperience() {
       <SaveMoviePromptModal
         open={savePromptOpen}
         category={savePromptCategory}
+        ratedByUserName={user?.name ?? null}
+        ratingBaseItem={savePromptMovie}
         onCancel={() => {
           setSavePromptOpen(false);
           setSavePromptCategory(null);
@@ -926,24 +1031,42 @@ export default function TmdbSearchExperience() {
           if (!savePromptMovie || !savePromptCategory) return;
           if (!user) return;
 
-          const nextMovie: LibraryItem = {
-            ...savePromptMovie,
-            recommendedBy: user.name,
-            alexRating:
-              savePromptCategory === "watched" ? args.alexRating ?? null : null,
-            brittonRating:
-              savePromptCategory === "watched" ? args.brittonRating ?? null : null,
-            nabiRating:
-              savePromptCategory === "watched" ? args.nabiRating ?? null : null,
-            groupRatings:
-              savePromptCategory === "watched"
-                ? {
-                    alex: args.alexRating ?? null,
-                    britton: args.brittonRating ?? null,
-                    nabi: args.nabiRating ?? null,
-                  }
-                : undefined,
-          };
+          const placement = itemPlacementInLibrary(
+            library,
+            savePromptMovie,
+          );
+          if (shouldBlockDuplicateSave(savePromptCategory, placement)) {
+            setSavePromptOpen(false);
+            setSavePromptCategory(null);
+            setSavePromptMovie(null);
+            setDuplicateSaveMessage(
+              messageForBlockedDuplicateSave(
+                savePromptCategory,
+                placement,
+              ),
+            );
+            setDuplicateSaveOpen(true);
+            return;
+          }
+
+          const nextMovie: LibraryItem =
+            savePromptCategory === "watched"
+              ? setSeenTrueForPerson(
+                  {
+                    ...savePromptMovie,
+                    recommendedBy: user.name,
+                    ...mergeWatchedRatingPatch(savePromptMovie, args),
+                  },
+                  seenPersonForMovieNightUser(user.name),
+                )
+              : {
+                  ...savePromptMovie,
+                  recommendedBy: user.name,
+                  alexRating: null,
+                  brittonRating: null,
+                  nabiRating: null,
+                  groupRatings: undefined,
+                };
 
           saveMovie(nextMovie, savePromptCategory);
 
@@ -965,6 +1088,44 @@ export default function TmdbSearchExperience() {
           clearAfterSave();
         }}
       />
+
+      {duplicateSaveOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="duplicate-save-title"
+          aria-describedby="duplicate-save-desc"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setDuplicateSaveOpen(false)}
+            aria-label="Close"
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-zinc-900 shadow-xl dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50">
+            <h2
+              id="duplicate-save-title"
+              className="text-lg font-semibold tracking-tight"
+            >
+              Already in your library
+            </h2>
+            <p
+              id="duplicate-save-desc"
+              className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400"
+            >
+              {duplicateSaveMessage}
+            </p>
+            <button
+              type="button"
+              onClick={() => setDuplicateSaveOpen(false)}
+              className="mt-6 min-h-[44px] w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {toast ? (
         <div className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900">
@@ -1387,9 +1548,18 @@ export function expandRecommenderWeightedSlots(items: LibraryItem[]): LibraryIte
 </file>
 
 <file path="lib/watchlistGroup.ts">
+import type { MovieNightUserName } from "./auth";
 import { isWatchlistItemPassed, type LibraryItem } from "./movieLibrary";
 
 export type SeenPerson = "alex" | "britton" | "nabi";
+
+export function seenPersonForMovieNightUser(
+  name: MovieNightUserName,
+): SeenPerson {
+  if (name === "Alex") return "alex";
+  if (name === "Britton") return "britton";
+  return "nabi";
+}
 
 export const defaultSeenIt = (): NonNullable<LibraryItem["seenIt"]> => ({
   alex: false,
@@ -1421,6 +1591,26 @@ export function toggleSeenForPerson(
       [person]: !seenIt[person],
     },
   };
+}
+
+/** Sets one person’s “have watched” flag to true (idempotent). */
+export function setSeenTrueForPerson(
+  item: LibraryItem,
+  person: SeenPerson,
+): LibraryItem {
+  const seenIt = normalizeSeenIt(item);
+  return {
+    ...item,
+    seenIt: {
+      ...seenIt,
+      [person]: true,
+    },
+  };
+}
+
+export function everyoneHasSeenIt(item: LibraryItem): boolean {
+  const s = normalizeSeenIt(item);
+  return s.alex && s.britton && s.nabi;
 }
 
 export function togglePassed(
@@ -1842,8 +2032,31 @@ export default function CategoryDropdown({
 <file path="components/SaveMoviePromptModal.tsx">
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { LibraryCategory } from "../lib/movieLibrary";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { MovieNightUserName } from "../lib/auth";
+import {
+  calculateGroupAverage,
+  getPersonWatchedRating,
+  mergeWatchedRatingPatch,
+  type LibraryCategory,
+  type LibraryItem,
+  type WatchedPerson,
+  type WatchedRatingPatch,
+} from "../lib/movieLibrary";
+
+const PERSON_BY_LOGIN: Record<MovieNightUserName, WatchedPerson> = {
+  Alex: "alex",
+  Britton: "britton",
+  Nabi: "nabi",
+};
+
+const PERSON_LABELS: Record<WatchedPerson, string> = {
+  alex: "Alex",
+  britton: "Britton",
+  nabi: "Nabi",
+};
+
+const PERSON_ORDER: WatchedPerson[] = ["alex", "britton", "nabi"];
 
 function RatingSlider10({
   label,
@@ -1882,40 +2095,80 @@ function RatingSlider10({
   );
 }
 
+function OthersRatingReadout({
+  person,
+  value,
+}: {
+  person: WatchedPerson;
+  value: number | null;
+}) {
+  const label = PERSON_LABELS[person];
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/30">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+          {label}
+        </p>
+        <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          {value !== null ? value : "—"}
+        </span>
+      </div>
+      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+        {value !== null
+          ? "Only they can change this rating."
+          : "Not rated yet — they add theirs when they watch."}
+      </p>
+    </div>
+  );
+}
+
 export default function SaveMoviePromptModal({
   open,
   category,
+  ratedByUserName,
+  ratingBaseItem,
   onCancel,
   onSave,
 }: {
   open: boolean;
   category: LibraryCategory | null;
+  /** Logged-in Movie Night user; required to submit a watched rating. */
+  ratedByUserName: MovieNightUserName | null;
+  /** Row being saved (watchlist → watched or rating updates); used for merge + readouts. */
+  ratingBaseItem: LibraryItem | null;
   onCancel: () => void;
-  onSave: (args: {
-    alexRating?: number | null;
-    brittonRating?: number | null;
-    nabiRating?: number | null;
-  }) => void;
+  onSave: (args: WatchedRatingPatch) => void;
 }) {
-  const [alexRating, setAlexRating] = useState<number>(7);
-  const [brittonRating, setBrittonRating] = useState<number>(7);
-  const [nabiRating, setNabiRating] = useState<number>(7);
+  const [myRating, setMyRating] = useState<number>(7);
   const [error, setError] = useState<string | null>(null);
   const didAutoSaveRef = useRef(false);
 
-  const isWatched = category === "watched";
+  const myPerson: WatchedPerson | null = ratedByUserName
+    ? PERSON_BY_LOGIN[ratedByUserName]
+    : null;
+
+  const groupPreview = useMemo(() => {
+    if (category !== "watched" || !ratingBaseItem || !myPerson) return null;
+    const patch: WatchedRatingPatch = {};
+    if (myPerson === "alex") patch.alexRating = myRating;
+    else if (myPerson === "britton") patch.brittonRating = myRating;
+    else patch.nabiRating = myRating;
+    const m = mergeWatchedRatingPatch(ratingBaseItem, patch);
+    return calculateGroupAverage(m.alexRating, m.brittonRating, m.nabiRating);
+  }, [category, ratingBaseItem, myPerson, myRating]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || category !== "watched") return;
     let cancelled = false;
 
     const run = async () => {
-      // Defer state updates to satisfy eslint "set-state-in-effect".
       await Promise.resolve();
       if (cancelled) return;
-      setAlexRating(7);
-      setBrittonRating(7);
-      setNabiRating(7);
+      if (myPerson && ratingBaseItem) {
+        setMyRating(getPersonWatchedRating(ratingBaseItem, myPerson) ?? 7);
+      } else {
+        setMyRating(7);
+      }
       setError(null);
     };
 
@@ -1923,15 +2176,12 @@ export default function SaveMoviePromptModal({
     return () => {
       cancelled = true;
     };
-  }, [open, category]);
+  }, [open, category, myPerson, ratingBaseItem]);
 
-  // Reset the auto-save guard whenever the modal is opened/changed.
   useEffect(() => {
     didAutoSaveRef.current = false;
   }, [open, category]);
 
-  // For Watchlist we don't need any extra inputs, so we skip the modal UI entirely
-  // and save immediately once the modal is opened.
   useEffect(() => {
     if (!open || !category) return;
     if (category !== "watchlist") return;
@@ -1975,7 +2225,8 @@ export default function SaveMoviePromptModal({
           <div>
             <h2 className="text-lg font-semibold">Save movie</h2>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Mark as Watched.
+              Mark as Watched — set your score (1–10). Others add theirs when
+              they watch.
             </p>
           </div>
 
@@ -1994,46 +2245,56 @@ export default function SaveMoviePromptModal({
             e.preventDefault();
             setError(null);
 
-            if (isWatched) {
-              if (alexRating < 1 || alexRating > 10) {
-                setError("Please set Alex rating (1-10).");
-                return;
-              }
-              if (brittonRating < 1 || brittonRating > 10) {
-                setError("Please set Britton rating (1-10).");
-                return;
-              }
-              if (nabiRating < 1 || nabiRating > 10) {
-                setError("Please set Nabi rating (1-10).");
-                return;
-              }
+            if (!ratedByUserName || !myPerson) {
+              setError("Sign in from the header to save your rating.");
+              return;
+            }
+            if (myRating < 1 || myRating > 10) {
+              setError("Set a rating between 1 and 10.");
+              return;
             }
 
-            onSave({
-              alexRating: isWatched ? alexRating : null,
-              brittonRating: isWatched ? brittonRating : null,
-              nabiRating: isWatched ? nabiRating : null,
-            });
+            const patch: WatchedRatingPatch = {};
+            if (myPerson === "alex") patch.alexRating = myRating;
+            else if (myPerson === "britton") patch.brittonRating = myRating;
+            else patch.nabiRating = myRating;
+
+            onSave(patch);
           }}
         >
-          {isWatched ? (
-            <div className="flex flex-col gap-3">
-              <RatingSlider10
-                label="Alex"
-                value={alexRating}
-                onChange={setAlexRating}
-              />
-              <RatingSlider10
-                label="Britton"
-                value={brittonRating}
-                onChange={setBrittonRating}
-              />
-              <RatingSlider10
-                label="Nabi"
-                value={nabiRating}
-                onChange={setNabiRating}
-              />
-            </div>
+          <div className="flex flex-col gap-3">
+            {PERSON_ORDER.map((person) => {
+              const existing = ratingBaseItem
+                ? getPersonWatchedRating(ratingBaseItem, person)
+                : null;
+              const isMine = myPerson === person;
+              if (isMine) {
+                return (
+                  <RatingSlider10
+                    key={person}
+                    label={`${PERSON_LABELS[person]} (you)`}
+                    value={myRating}
+                    onChange={setMyRating}
+                  />
+                );
+              }
+              return (
+                <OthersRatingReadout
+                  key={person}
+                  person={person}
+                  value={existing}
+                />
+              );
+            })}
+          </div>
+
+          {groupPreview !== null ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Group average (so far):{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                {groupPreview}
+              </span>
+            </p>
           ) : null}
 
           {error ? (
@@ -2052,7 +2313,8 @@ export default function SaveMoviePromptModal({
             </button>
             <button
               type="submit"
-              className="min-h-[44px] rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
+              disabled={!ratedByUserName}
+              className="min-h-[44px] rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
             >
               Save
             </button>
@@ -2214,7 +2476,7 @@ export type LibraryItem = {
   alexRating?: number | null;
   brittonRating?: number | null;
   nabiRating?: number | null;
-  /** Watchlist: who has seen the trailer / is ready (group tracking). */
+  /** Watchlist: who has finished watching; when all three are true, the title can move to Watched. */
   seenIt?: {
     alex: boolean;
     britton: boolean;
@@ -2270,6 +2532,89 @@ export function libraryItemDocId(
   tmdbId: number,
 ): string {
   return `${mediaType}_${tmdbId}`;
+}
+
+/** Same logical title: exact doc id, or same TMDB movie/tv id (misc: doc id only). */
+export function libraryItemsShareIdentity(a: LibraryItem, b: LibraryItem): boolean {
+  if (a.docId === b.docId) return true;
+  if (a.mediaType === "misc" || b.mediaType === "misc") return false;
+  const ta = a.tmdbId;
+  const tb = b.tmdbId;
+  if (typeof ta !== "number" || typeof tb !== "number") return false;
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return false;
+  return a.mediaType === b.mediaType && ta === tb;
+}
+
+function tmdbRowHasCanonicalDocId(item: LibraryItem): boolean {
+  if (item.mediaType === "misc") return item.docId.startsWith("misc_");
+  if (item.tmdbId == null || !Number.isFinite(item.tmdbId)) return false;
+  return item.docId === libraryItemDocId(item.mediaType, item.tmdbId);
+}
+
+/**
+ * Collapse duplicate TMDB rows (e.g. legacy numeric Firestore id vs movie_123).
+ * Prefers canonical doc ids and merges common fields.
+ */
+export function dedupeLibraryItemsByIdentity(items: LibraryItem[]): LibraryItem[] {
+  const out: LibraryItem[] = [];
+  for (const item of items) {
+    const j = out.findIndex((m) => libraryItemsShareIdentity(m, item));
+    if (j < 0) {
+      out.push(item);
+      continue;
+    }
+    const existing = out[j]!;
+    const preferIncoming =
+      tmdbRowHasCanonicalDocId(item) && !tmdbRowHasCanonicalDocId(existing);
+    const preferExisting =
+      tmdbRowHasCanonicalDocId(existing) && !tmdbRowHasCanonicalDocId(item);
+    const primary = preferIncoming ? item : preferExisting ? existing : item;
+    const secondary = primary === item ? existing : item;
+
+    const mergedSeen = {
+      alex: Boolean(primary.seenIt?.alex || secondary.seenIt?.alex),
+      britton: Boolean(primary.seenIt?.britton || secondary.seenIt?.britton),
+      nabi: Boolean(primary.seenIt?.nabi || secondary.seenIt?.nabi),
+    };
+
+    const mt = primary.mediaType;
+    const tid = primary.tmdbId;
+    const mergedDocId =
+      mt !== "misc" && typeof tid === "number" && Number.isFinite(tid)
+        ? libraryItemDocId(mt, tid)
+        : primary.docId;
+
+    out[j] = {
+      ...primary,
+      docId: mergedDocId,
+      genreIds:
+        primary.genreIds && primary.genreIds.length > 0
+          ? primary.genreIds
+          : secondary.genreIds,
+      recommendedBy: primary.recommendedBy ?? secondary.recommendedBy,
+      alexRating: primary.alexRating ?? secondary.alexRating,
+      brittonRating: primary.brittonRating ?? secondary.brittonRating,
+      nabiRating: primary.nabiRating ?? secondary.nabiRating,
+      groupRatings: primary.groupRatings ?? secondary.groupRatings,
+      seenIt: mergedSeen,
+      passed: Boolean(primary.passed || secondary.passed),
+      passedBy: primary.passedBy ?? secondary.passedBy,
+    };
+  }
+  return out;
+}
+
+export function itemPlacementInLibrary(
+  library: MediaLibrary,
+  item: LibraryItem,
+): "watchlist" | "watched" | null {
+  if (library.watchlist.some((m) => libraryItemsShareIdentity(m, item))) {
+    return "watchlist";
+  }
+  if (library.watched.some((m) => libraryItemsShareIdentity(m, item))) {
+    return "watched";
+  }
+  return null;
 }
 
 /**
@@ -2431,21 +2776,78 @@ export function isTmdbItemMissingGenres(item: LibraryItem): boolean {
   return !item.genreIds?.length;
 }
 
+/** Partial ratings from the “mark watched” flow (only the signed-in user’s key is set). */
+export type WatchedRatingPatch = {
+  alexRating?: number | null;
+  brittonRating?: number | null;
+  nabiRating?: number | null;
+};
+
+export type WatchedPerson = "alex" | "britton" | "nabi";
+
+export function getPersonWatchedRating(
+  item: LibraryItem | null | undefined,
+  person: WatchedPerson,
+): number | null {
+  if (!item) return null;
+  const top =
+    person === "alex"
+      ? item.alexRating
+      : person === "britton"
+        ? item.brittonRating
+        : item.nabiRating;
+  if (typeof top === "number" && top >= 1 && top <= 10) return top;
+  const g = item.groupRatings?.[person];
+  if (typeof g === "number" && g >= 1 && g <= 10) return g;
+  return null;
+}
+
+/** Merges a partial patch with existing row data so one person can save without wiping others’ ratings. */
+export function mergeWatchedRatingPatch(
+  base: LibraryItem,
+  patch: WatchedRatingPatch,
+): {
+  alexRating: number | null;
+  brittonRating: number | null;
+  nabiRating: number | null;
+  groupRatings: {
+    alex: number | null;
+    britton: number | null;
+    nabi: number | null;
+  };
+} {
+  const alex =
+    patch.alexRating !== undefined
+      ? patch.alexRating
+      : getPersonWatchedRating(base, "alex");
+  const britton =
+    patch.brittonRating !== undefined
+      ? patch.brittonRating
+      : getPersonWatchedRating(base, "britton");
+  const nabi =
+    patch.nabiRating !== undefined
+      ? patch.nabiRating
+      : getPersonWatchedRating(base, "nabi");
+  return {
+    alexRating: alex,
+    brittonRating: britton,
+    nabiRating: nabi,
+    groupRatings: { alex, britton, nabi },
+  };
+}
+
+/** Mean of valid 1–10 ratings only; omits people who have not rated yet. */
 export function calculateGroupAverage(
   alex: number | null | undefined,
   britton: number | null | undefined,
   nabi: number | null | undefined,
 ) {
-  const a =
-    typeof alex === "number" && alex >= 1 && alex <= 10 ? alex : null;
-  const b =
-    typeof britton === "number" && britton >= 1 && britton <= 10
-      ? britton
-      : null;
-  const c =
-    typeof nabi === "number" && nabi >= 1 && nabi <= 10 ? nabi : null;
-  if (a === null || b === null || c === null) return null;
-  const avg = (a + b + c) / 3;
+  const scores: number[] = [];
+  for (const v of [alex, britton, nabi]) {
+    if (typeof v === "number" && v >= 1 && v <= 10) scores.push(v);
+  }
+  if (scores.length === 0) return null;
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
   return Math.round(avg * 10) / 10;
 }
 
@@ -2690,8 +3092,17 @@ export function moveMovieInLibrary(
   item: LibraryItem,
   toCategory: LibraryCategory,
 ): MediaLibrary {
+  const notSame = (m: LibraryItem) => !libraryItemsShareIdentity(m, item);
+
   if (toCategory === "watchlist") {
     const cleared: LibraryItem = { ...item };
+    if (
+      cleared.mediaType !== "misc" &&
+      typeof cleared.tmdbId === "number" &&
+      Number.isFinite(cleared.tmdbId)
+    ) {
+      cleared.docId = libraryItemDocId(cleared.mediaType, cleared.tmdbId);
+    }
     delete cleared.groupRatings;
     delete cleared.alexRating;
     delete cleared.brittonRating;
@@ -2700,17 +3111,21 @@ export function moveMovieInLibrary(
     cleared.passed = false;
     cleared.passedBy = undefined;
     return {
-      watchlist: [
-        ...library.watchlist.filter((m) => m.docId !== item.docId),
-        cleared,
-      ],
-      watched: library.watched.filter((m) => m.docId !== item.docId),
+      watchlist: [...library.watchlist.filter(notSame), cleared],
+      watched: library.watched.filter(notSame),
     };
   }
 
+  const placed: LibraryItem =
+    item.mediaType !== "misc" &&
+    typeof item.tmdbId === "number" &&
+    Number.isFinite(item.tmdbId)
+      ? { ...item, docId: libraryItemDocId(item.mediaType, item.tmdbId) }
+      : item;
+
   return {
-    watchlist: library.watchlist.filter((m) => m.docId !== item.docId),
-    watched: [...library.watched.filter((m) => m.docId !== item.docId), item],
+    watchlist: library.watchlist.filter(notSame),
+    watched: [...library.watched.filter(notSame), placed],
   };
 }
 
@@ -2718,9 +3133,20 @@ export function removeMovieFromLibrary(
   library: MediaLibrary,
   docId: string,
 ): MediaLibrary {
+  const target =
+    library.watchlist.find((m) => m.docId === docId) ??
+    library.watched.find((m) => m.docId === docId) ??
+    null;
+  if (!target) {
+    return {
+      watchlist: library.watchlist.filter((m) => m.docId !== docId),
+      watched: library.watched.filter((m) => m.docId !== docId),
+    };
+  }
+  const notMatch = (m: LibraryItem) => !libraryItemsShareIdentity(m, target);
   return {
-    watchlist: library.watchlist.filter((m) => m.docId !== docId),
-    watched: library.watched.filter((m) => m.docId !== docId),
+    watchlist: library.watchlist.filter(notMatch),
+    watched: library.watched.filter(notMatch),
   };
 }
 
@@ -3366,14 +3792,14 @@ jobs:
 <file path="app/library/page.tsx">
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import CategoryDropdown from "../../components/CategoryDropdown";
 import { useMovieLibrary } from "../../hooks/useMovieLibrary";
 import {
   categoryLabels,
   copyGenreIdsForPersist,
   libraryTabLabels,
+  mergeWatchedRatingPatch,
   recommendedByLabel,
   youtubeVideoIdFromUrl,
   type LibraryCategory,
@@ -3381,12 +3807,19 @@ import {
   type LibraryMediaType,
 } from "../../lib/movieLibrary";
 import SaveMoviePromptModal from "../../components/SaveMoviePromptModal";
+import WatchlistCardRatingsRow from "../../components/WatchlistCardRatingsRow";
 import {
   PassedRibbon,
   WatchlistGroupControls,
 } from "../../components/WatchlistGroupControls";
 import { calculateGroupAverage } from "../../lib/movieLibrary";
 import { useAuth } from "../../hooks/useAuth";
+import {
+  everyoneHasSeenIt,
+  normalizeSeenIt,
+  seenPersonForMovieNightUser,
+  setSeenTrueForPerson,
+} from "../../lib/watchlistGroup";
 
 const posterBase = "https://image.tmdb.org/t/p/w500";
 
@@ -3428,16 +3861,24 @@ export default function LibraryPage() {
   const [undoMessage, setUndoMessage] = useState<string | null>(null);
   const deleteTimerRef = useRef<number | null>(null);
 
-  const moveOptions = useMemo(() => {
-    return ALL_CATEGORIES.filter((c) => c !== activeCategory).map((c) => ({
-      value: c,
-      label: categoryLabels[c],
-    }));
-  }, [activeCategory]);
-
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(null), 2500);
+  }
+
+  function promoteIfWatchlistEveryoneSeen(
+    movieBefore: LibraryItem,
+    nextItem: LibraryItem,
+  ) {
+    const onWl = library.watchlist.some((m) => m.docId === movieBefore.docId);
+    if (!onWl) return;
+    const wasAll = everyoneHasSeenIt(movieBefore);
+    const nowAll = everyoneHasSeenIt(nextItem);
+    if (!wasAll && nowAll) {
+      setSavePromptCategory("watched");
+      setSavePromptMovie(nextItem);
+      setSavePromptOpen(true);
+    }
   }
 
   function formatRating10(value: number | null | undefined) {
@@ -3681,14 +4122,19 @@ export default function LibraryPage() {
                           item={movie}
                           disabled={!hydrated}
                           showPass
-                          onPatch={(next) =>
+                          onPatch={(next) => {
                             patchLibraryItem(movie.docId, {
                               seenIt: next.seenIt,
                               passed: next.passed,
                               passedBy: next.passedBy,
-                            })
-                          }
+                            });
+                            promoteIfWatchlistEveryoneSeen(movie, next);
+                          }}
                         />
+                      ) : null}
+
+                      {isWatchlist ? (
+                        <WatchlistCardRatingsRow item={movie} />
                       ) : null}
 
                       {isWatched ? (
@@ -3760,17 +4206,57 @@ export default function LibraryPage() {
                           </svg>
                         </button>
 
-                        <CategoryDropdown
-                          summaryLabel="Move to..."
-                          options={moveOptions}
-                          disabled={!hydrated}
-                          align="left"
-                          onSelect={(cat) => {
-                            setSavePromptCategory(cat);
-                            setSavePromptMovie(movie);
-                            setSavePromptOpen(true);
-                          }}
-                        />
+                        {isWatchlist ? (
+                          <button
+                            type="button"
+                            disabled={!hydrated || !user}
+                            title={
+                              !user
+                                ? "Sign in from the header to mark as watched"
+                                : undefined
+                            }
+                            onClick={() => {
+                              if (!user) return;
+                              const person = seenPersonForMovieNightUser(
+                                user.name,
+                              );
+                              const baseline = normalizeSeenIt(movie);
+                              const nextForModal = setSeenTrueForPerson(
+                                movie,
+                                person,
+                              );
+                              if (!baseline[person]) {
+                                patchLibraryItem(movie.docId, {
+                                  seenIt: nextForModal.seenIt,
+                                });
+                              }
+                              setSavePromptCategory("watched");
+                              setSavePromptMovie(nextForModal);
+                              setSavePromptOpen(true);
+                            }}
+                            className="min-h-[44px] rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+                          >
+                            Watch
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={!hydrated || !user}
+                            title={
+                              !user
+                                ? "Sign in from the header to move titles"
+                                : undefined
+                            }
+                            onClick={() => {
+                              setSavePromptCategory("watchlist");
+                              setSavePromptMovie(movie);
+                              setSavePromptOpen(true);
+                            }}
+                            className="min-h-[44px] rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+                          >
+                            {categoryLabels.watchlist}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -3784,6 +4270,8 @@ export default function LibraryPage() {
       <SaveMoviePromptModal
         open={savePromptOpen}
         category={savePromptCategory}
+        ratedByUserName={user?.name ?? null}
+        ratingBaseItem={savePromptMovie}
         onCancel={() => {
           setSavePromptOpen(false);
           setSavePromptCategory(null);
@@ -3793,30 +4281,56 @@ export default function LibraryPage() {
           if (!savePromptMovie || !savePromptCategory) return;
           if (!user) return;
 
-          const nextMovie: LibraryItem = {
-            ...savePromptMovie,
-            genreIds: copyGenreIdsForPersist(savePromptMovie),
-            recommendedBy: user.name,
-            alexRating:
-              savePromptCategory === "watched" ? args.alexRating ?? null : null,
-            brittonRating:
-              savePromptCategory === "watched"
-                ? args.brittonRating ?? null
-                : null,
-            nabiRating:
-              savePromptCategory === "watched" ? args.nabiRating ?? null : null,
-            groupRatings:
-              savePromptCategory === "watched"
-                ? {
-                    alex: args.alexRating ?? null,
-                    britton: args.brittonRating ?? null,
-                    nabi: args.nabiRating ?? null,
-                  }
-                : undefined,
-          };
+          if (savePromptCategory === "watchlist") {
+            const nextMovie: LibraryItem = {
+              ...savePromptMovie,
+              genreIds: copyGenreIdsForPersist(savePromptMovie),
+              recommendedBy: user.name,
+              alexRating: null,
+              brittonRating: null,
+              nabiRating: null,
+              groupRatings: undefined,
+            };
+            moveMovie(nextMovie, "watchlist");
+            showToast(`Moved to ${categoryLabels.watchlist}.`);
+          } else {
+            const live =
+              library.watchlist.find(
+                (m) => m.docId === savePromptMovie.docId,
+              ) ??
+              library.watched.find((m) => m.docId === savePromptMovie.docId) ??
+              savePromptMovie;
 
-          moveMovie(nextMovie, savePromptCategory);
-          showToast(`Moved to ${categoryLabels[savePromptCategory]}.`);
+            const merged = setSeenTrueForPerson(
+              {
+                ...live,
+                genreIds: copyGenreIdsForPersist(savePromptMovie),
+                recommendedBy: user.name,
+                ...mergeWatchedRatingPatch(live, args),
+              },
+              seenPersonForMovieNightUser(user.name),
+            );
+
+            const stillOnWatchlist = library.watchlist.some(
+              (m) => m.docId === merged.docId,
+            );
+
+            if (stillOnWatchlist && !everyoneHasSeenIt(merged)) {
+              patchLibraryItem(merged.docId, {
+                seenIt: merged.seenIt,
+                alexRating: merged.alexRating,
+                brittonRating: merged.brittonRating,
+                nabiRating: merged.nabiRating,
+                groupRatings: merged.groupRatings,
+              });
+              showToast(
+                "Rating saved on Watchlist. It moves to Watched when everyone has watched.",
+              );
+            } else {
+              moveMovie(merged, "watched");
+              showToast(`Moved to ${categoryLabels.watched}.`);
+            }
+          }
 
           setSavePromptOpen(false);
           setSavePromptCategory(null);
@@ -4632,472 +5146,6 @@ export default function RootLayout({
 }
 </file>
 
-<file path="hooks/useMovieLibrary.ts">
-"use client";
-
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  moveMovieInLibrary,
-  removeMovieFromLibrary,
-  emptyLibrary,
-  isWatchlistItemPassed,
-  isTmdbItemMissingGenres,
-  libraryItemFromFirestore,
-  type LibraryCategory,
-  type LibraryItem,
-  type MediaLibrary,
-} from "../lib/movieLibrary";
-import { initFirebase } from "../src/lib/firebase";
-import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
-import { tmdbGetMovieDetails, tmdbGetTvDetails } from "../src/lib/tmdbClient";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  query,
-  setDoc,
-  onSnapshot,
-  where,
-} from "firebase/firestore";
-import type { Firestore } from "firebase/firestore";
-function applyPatchToLibrary(
-  library: MediaLibrary,
-  docId: string,
-  patch: Partial<LibraryItem>,
-): { nextLib: MediaLibrary; item: LibraryItem; category: LibraryCategory } | null {
-  const wi = library.watchlist.findIndex((m) => m.docId === docId);
-  const di = library.watched.findIndex((m) => m.docId === docId);
-  if (wi < 0 && di < 0) return null;
-  const category: LibraryCategory = wi >= 0 ? "watchlist" : "watched";
-  const idx = wi >= 0 ? wi : di;
-  const source = wi >= 0 ? library.watchlist : library.watched;
-  const item = source[idx]!;
-  const nextItem: LibraryItem = { ...item, ...patch };
-  const nextWatch =
-    wi >= 0
-      ? library.watchlist.map((m, i) => (i === wi ? nextItem : m))
-      : library.watchlist;
-  const nextWatched =
-    di >= 0
-      ? library.watched.map((m, i) => (i === di ? nextItem : m))
-      : library.watched;
-
-  return {
-    nextLib: { watchlist: nextWatch, watched: nextWatched },
-    item: nextItem,
-    category,
-  };
-}
-
-function itemToFirestoreData(item: LibraryItem, category: LibraryCategory) {
-  const genreIdsForStore =
-    item.mediaType === "misc"
-      ? null
-      : Array.isArray(item.genreIds) && item.genreIds.length > 0
-        ? [...item.genreIds]
-        : null;
-
-  const base: Record<string, unknown> = {
-    mediaType: item.mediaType,
-    id: item.tmdbId,
-    title: item.title,
-    release_date: item.release_date,
-    poster_path: item.poster_path,
-    recommendedBy: item.recommendedBy ?? null,
-    genre_ids: genreIdsForStore,
-    category,
-  };
-
-  if (item.mediaType === "misc") {
-    base.url = item.url ?? null;
-    base.id = null;
-    base.genre_ids = null;
-  }
-
-  if (category === "watchlist") {
-    const s = item.seenIt ?? { alex: false, britton: false, nabi: false };
-    base.seenIt = {
-      alex: Boolean(s.alex),
-      britton: Boolean(s.britton),
-      nabi: Boolean(s.nabi),
-    };
-    base.passed = isWatchlistItemPassed(item);
-    base.passedBy = item.passedBy?.trim() || null;
-    return base;
-  }
-
-  const s = item.seenIt ?? { alex: false, britton: false, nabi: false };
-  return {
-    ...base,
-    alexRating: item.alexRating ?? null,
-    brittonRating: item.brittonRating ?? null,
-    nabiRating: item.nabiRating ?? null,
-    groupRatings: {
-      alex: item.groupRatings?.alex ?? item.alexRating ?? null,
-      britton: item.groupRatings?.britton ?? item.brittonRating ?? null,
-      nabi: item.groupRatings?.nabi ?? item.nabiRating ?? null,
-    },
-    seenIt: {
-      alex: Boolean(s.alex),
-      britton: Boolean(s.britton),
-      nabi: Boolean(s.nabi),
-    },
-  };
-}
-
-export function useMovieLibrary() {
-  const [library, setLibrary] = useState<MediaLibrary>(emptyLibrary);
-  const [hydrated, setHydrated] = useState(false);
-  /** Bumps when genre backfill skips so the worker effect runs again without waiting on Firestore. */
-  const [genreWorkerTick, setGenreWorkerTick] = useState(0);
-
-  const dbRef = useRef<Firestore | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let watchlistLoaded = false;
-    let watchedLoaded = false;
-    let watchlist: LibraryItem[] = [];
-    let watched: LibraryItem[] = [];
-    let didHydrate = false;
-
-    const forceHydrate = () => {
-      if (didHydrate || cancelled) return;
-      didHydrate = true;
-      setLibrary({ watchlist, watched });
-      setHydrated(true);
-    };
-
-    const normalizeItem = (docId: string, d: unknown): LibraryItem | null => {
-      const obj = d as Record<string, unknown>;
-      if (!obj || typeof obj !== "object") return null;
-      return libraryItemFromFirestore(docId, obj);
-    };
-
-    const maybeHydrate = () => {
-      if (!watchlistLoaded || !watchedLoaded) return;
-      forceHydrate();
-    };
-
-    const run = async () => {
-      await Promise.resolve();
-      try {
-        const { db, auth } = initFirebase();
-        dbRef.current = db;
-
-        await new Promise<void>((resolve, reject) => {
-          const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (firebaseUser) {
-              unsub();
-              resolve();
-              return;
-            }
-            try {
-              await signInAnonymously(auth);
-            } catch (e) {
-              unsub();
-              reject(e);
-            }
-          });
-        });
-
-        const moviesCollectionRef = collection(db, "movies");
-
-        const watchlistQ = query(
-          moviesCollectionRef,
-          where("category", "==", "watchlist"),
-        );
-        const watchedQ = query(
-          moviesCollectionRef,
-          where("category", "==", "watched"),
-        );
-
-        const unsubWatchlist = onSnapshot(
-          watchlistQ,
-          (snap) => {
-            if (cancelled) return;
-            watchlist = snap.docs
-              .map((docSnap) =>
-                normalizeItem(docSnap.id, docSnap.data()),
-              )
-              .filter((m): m is LibraryItem => !!m);
-            watchlistLoaded = true;
-            maybeHydrate();
-          },
-          (err) => {
-            if (cancelled) return;
-            console.error("Firestore watchlist listener error", err);
-            watchlist = [];
-            watchlistLoaded = true;
-            maybeHydrate();
-          },
-        );
-
-        const unsubWatched = onSnapshot(
-          watchedQ,
-          (snap) => {
-            if (cancelled) return;
-            watched = snap.docs
-              .map((docSnap) =>
-                normalizeItem(docSnap.id, docSnap.data()),
-              )
-              .filter((m): m is LibraryItem => !!m);
-            watchedLoaded = true;
-            maybeHydrate();
-          },
-          (err) => {
-            if (cancelled) return;
-            console.error("Firestore watched listener error", err);
-            watched = [];
-            watchedLoaded = true;
-            maybeHydrate();
-          },
-        );
-
-        return () => {
-          unsubWatchlist();
-          unsubWatched();
-        };
-      } catch (err) {
-        console.error("Firestore init failed", err);
-        if (!cancelled) {
-          watchlistLoaded = true;
-          watchedLoaded = true;
-          watchlist = [];
-          watched = [];
-          forceHydrate();
-        }
-        return () => {};
-      }
-    };
-
-    let cleanup: undefined | (() => void);
-    void run().then((c) => {
-      cleanup = c ?? undefined;
-    });
-
-    const timeoutId = window.setTimeout(() => {
-      watchlistLoaded = true;
-      watchedLoaded = true;
-      forceHydrate();
-    }, 5_000);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-      cleanup?.();
-    };
-  }, []);
-
-  const saveMovie = useMemo(
-    () => (item: LibraryItem, category: LibraryCategory) => {
-      const db = dbRef.current;
-      if (!db) return;
-
-      setLibrary((prev) => moveMovieInLibrary(prev, item, category));
-
-      const docRef = doc(db, "movies", item.docId);
-      const data = itemToFirestoreData(item, category);
-
-      void setDoc(docRef, data, { merge: false }).catch((err) => {
-        console.error("Firestore saveMovie failed", err);
-      });
-    },
-    [],
-  );
-
-  const removeMovie = useMemo(
-    () => (docId: string) => {
-      const db = dbRef.current;
-      if (!db) return;
-
-      setLibrary((prev) => removeMovieFromLibrary(prev, docId));
-
-      const docRef = doc(db, "movies", docId);
-      void deleteDoc(docRef).catch((err) => {
-        console.error("Firestore removeMovie failed", err);
-      });
-    },
-    [],
-  );
-
-  const moveMovie = useMemo(
-    () => (item: LibraryItem, toCategory: LibraryCategory) => {
-      const db = dbRef.current;
-      if (!db) return;
-
-      setLibrary((prev) => moveMovieInLibrary(prev, item, toCategory));
-
-      const docRef = doc(db, "movies", item.docId);
-      const data = itemToFirestoreData(item, toCategory);
-
-      void setDoc(docRef, data, { merge: false }).catch((err) => {
-        console.error("Firestore moveMovie failed", err);
-      });
-    },
-    [],
-  );
-
-  const patchLibraryItem = useCallback(
-    (docId: string, patch: Partial<LibraryItem>) => {
-      setLibrary((prev) => {
-        const r = applyPatchToLibrary(prev, docId, patch);
-        if (!r) return prev;
-        const db = dbRef.current;
-        if (db) {
-          queueMicrotask(() => {
-            void setDoc(doc(db, "movies", docId), itemToFirestoreData(r.item, r.category), {
-              merge: false,
-            }).catch((err) => {
-              console.error("Firestore patchLibraryItem failed", err);
-            });
-          });
-        }
-        return r.nextLib;
-      });
-    },
-    [],
-  );
-
-  /** Skip TMDB retry after empty/error; awaiting = reserved slot or patch written, waiting for snapshot. */
-  const genreSkipRef = useRef(new Set<string>());
-  const genreAwaitingRef = useRef(new Set<string>());
-  const genreAwaitSinceRef = useRef(new Map<string, number>());
-
-  const backfillMissingGenres = useCallback(
-    async (opts?: { maxItems?: number; clearSkipped?: boolean }) => {
-      if (opts?.clearSkipped) {
-        genreSkipRef.current.clear();
-        genreAwaitingRef.current.clear();
-        genreAwaitSinceRef.current.clear();
-        setGenreWorkerTick((x) => x + 1);
-      }
-      const maxItems = opts?.maxItems ?? 80;
-      let updated = 0;
-      let failed = 0;
-
-      const candidates: LibraryItem[] = [];
-      for (const item of library.watchlist) {
-        if (isTmdbItemMissingGenres(item)) candidates.push(item);
-      }
-      for (const item of library.watched) {
-        if (isTmdbItemMissingGenres(item)) candidates.push(item);
-      }
-
-      const slice = candidates.slice(0, maxItems);
-      for (const item of slice) {
-        try {
-          const d =
-            item.mediaType === "movie"
-              ? await tmdbGetMovieDetails(item.tmdbId!)
-              : await tmdbGetTvDetails(item.tmdbId!);
-          if (d.genre_ids.length > 0) {
-            patchLibraryItem(item.docId, {
-              genreIds: [...d.genre_ids],
-            });
-            genreAwaitingRef.current.add(item.docId);
-            genreAwaitSinceRef.current.set(item.docId, Date.now());
-            updated++;
-          } else {
-            genreSkipRef.current.add(item.docId);
-          }
-        } catch {
-          failed++;
-          genreSkipRef.current.add(item.docId);
-        }
-        await new Promise((r) => setTimeout(r, 320));
-      }
-
-      return {
-        updated,
-        failed,
-        skipped: Math.max(0, candidates.length - slice.length),
-      };
-    },
-    [library.watchlist, library.watched, patchLibraryItem, setGenreWorkerTick],
-  );
-
-  /** One title at a time: reserve → TMDB fetch → patch → wait for snapshot (or timeout). */
-  useEffect(() => {
-    if (!hydrated) return;
-
-    const combined = [...library.watchlist, ...library.watched];
-    const now = Date.now();
-    let timedOutAny = false;
-
-    for (const id of [...genreAwaitingRef.current]) {
-      const row = combined.find((x) => x.docId === id);
-      if (row?.genreIds?.length) {
-        genreAwaitingRef.current.delete(id);
-        genreAwaitSinceRef.current.delete(id);
-        continue;
-      }
-      const t0 = genreAwaitSinceRef.current.get(id);
-      if (t0 && now - t0 > 25_000) {
-        genreAwaitingRef.current.delete(id);
-        genreAwaitSinceRef.current.delete(id);
-        genreSkipRef.current.add(id);
-        timedOutAny = true;
-        console.warn("[movieNight] genre snapshot timeout, skipping", id);
-      }
-    }
-    if (timedOutAny) {
-      setGenreWorkerTick((x) => x + 1);
-    }
-
-    const next = combined.find((i) => {
-      if (!isTmdbItemMissingGenres(i)) return false;
-      if (genreSkipRef.current.has(i.docId)) return false;
-      if (genreAwaitingRef.current.has(i.docId)) return false;
-      return true;
-    });
-    if (!next) return;
-
-    genreAwaitingRef.current.add(next.docId);
-    genreAwaitSinceRef.current.set(next.docId, Date.now());
-
-    void (async () => {
-      try {
-        const d =
-          next.mediaType === "movie"
-            ? await tmdbGetMovieDetails(next.tmdbId!)
-            : await tmdbGetTvDetails(next.tmdbId!);
-        if (d.genre_ids.length > 0) {
-          patchLibraryItem(next.docId, { genreIds: [...d.genre_ids] });
-        } else {
-          genreAwaitingRef.current.delete(next.docId);
-          genreAwaitSinceRef.current.delete(next.docId);
-          genreSkipRef.current.add(next.docId);
-          setGenreWorkerTick((x) => x + 1);
-        }
-      } catch (e) {
-        console.warn("[movieNight] auto genre backfill failed", next.docId, e);
-        genreAwaitingRef.current.delete(next.docId);
-        genreAwaitSinceRef.current.delete(next.docId);
-        genreSkipRef.current.add(next.docId);
-        setGenreWorkerTick((x) => x + 1);
-      }
-    })();
-  }, [
-    hydrated,
-    library.watchlist,
-    library.watched,
-    patchLibraryItem,
-    genreWorkerTick,
-  ]);
-
-  return {
-    library,
-    hydrated,
-    saveMovie,
-    removeMovie,
-    moveMovie,
-    patchLibraryItem,
-    backfillMissingGenres,
-  };
-}
-</file>
-
 <file path="next.config.ts">
 import type { NextConfig } from "next";
 
@@ -5745,22 +5793,515 @@ async function parseTmdbError(res: Response): Promise<ParsedTmdbError> {
 }
 </file>
 
+<file path="hooks/useMovieLibrary.ts">
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  dedupeLibraryItemsByIdentity,
+  moveMovieInLibrary,
+  removeMovieFromLibrary,
+  emptyLibrary,
+  isWatchlistItemPassed,
+  isTmdbItemMissingGenres,
+  libraryItemFromFirestore,
+  type LibraryCategory,
+  type LibraryItem,
+  type MediaLibrary,
+} from "../lib/movieLibrary";
+import { initFirebase } from "../src/lib/firebase";
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { tmdbGetMovieDetails, tmdbGetTvDetails } from "../src/lib/tmdbClient";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  query,
+  setDoc,
+  onSnapshot,
+  where,
+} from "firebase/firestore";
+import type { Firestore } from "firebase/firestore";
+function applyPatchToLibrary(
+  library: MediaLibrary,
+  docId: string,
+  patch: Partial<LibraryItem>,
+): { nextLib: MediaLibrary; item: LibraryItem; category: LibraryCategory } | null {
+  const wi = library.watchlist.findIndex((m) => m.docId === docId);
+  const di = library.watched.findIndex((m) => m.docId === docId);
+  if (wi < 0 && di < 0) return null;
+  const category: LibraryCategory = wi >= 0 ? "watchlist" : "watched";
+  const idx = wi >= 0 ? wi : di;
+  const source = wi >= 0 ? library.watchlist : library.watched;
+  const item = source[idx]!;
+  const nextItem: LibraryItem = { ...item, ...patch };
+  const nextWatch =
+    wi >= 0
+      ? library.watchlist.map((m, i) => (i === wi ? nextItem : m))
+      : library.watchlist;
+  const nextWatched =
+    di >= 0
+      ? library.watched.map((m, i) => (i === di ? nextItem : m))
+      : library.watched;
+
+  return {
+    nextLib: { watchlist: nextWatch, watched: nextWatched },
+    item: nextItem,
+    category,
+  };
+}
+
+function itemToFirestoreData(item: LibraryItem, category: LibraryCategory) {
+  const genreIdsForStore =
+    item.mediaType === "misc"
+      ? null
+      : Array.isArray(item.genreIds) && item.genreIds.length > 0
+        ? [...item.genreIds]
+        : null;
+
+  const base: Record<string, unknown> = {
+    mediaType: item.mediaType,
+    id: item.tmdbId,
+    title: item.title,
+    release_date: item.release_date,
+    poster_path: item.poster_path,
+    recommendedBy: item.recommendedBy ?? null,
+    genre_ids: genreIdsForStore,
+    category,
+  };
+
+  if (item.mediaType === "misc") {
+    base.url = item.url ?? null;
+    base.id = null;
+    base.genre_ids = null;
+  }
+
+  if (category === "watchlist") {
+    const s = item.seenIt ?? { alex: false, britton: false, nabi: false };
+    base.seenIt = {
+      alex: Boolean(s.alex),
+      britton: Boolean(s.britton),
+      nabi: Boolean(s.nabi),
+    };
+    base.passed = isWatchlistItemPassed(item);
+    base.passedBy = item.passedBy?.trim() || null;
+    base.alexRating = item.alexRating ?? null;
+    base.brittonRating = item.brittonRating ?? null;
+    base.nabiRating = item.nabiRating ?? null;
+    base.groupRatings = {
+      alex: item.groupRatings?.alex ?? item.alexRating ?? null,
+      britton: item.groupRatings?.britton ?? item.brittonRating ?? null,
+      nabi: item.groupRatings?.nabi ?? item.nabiRating ?? null,
+    };
+    return base;
+  }
+
+  const s = item.seenIt ?? { alex: false, britton: false, nabi: false };
+  return {
+    ...base,
+    alexRating: item.alexRating ?? null,
+    brittonRating: item.brittonRating ?? null,
+    nabiRating: item.nabiRating ?? null,
+    groupRatings: {
+      alex: item.groupRatings?.alex ?? item.alexRating ?? null,
+      britton: item.groupRatings?.britton ?? item.brittonRating ?? null,
+      nabi: item.groupRatings?.nabi ?? item.nabiRating ?? null,
+    },
+    seenIt: {
+      alex: Boolean(s.alex),
+      britton: Boolean(s.britton),
+      nabi: Boolean(s.nabi),
+    },
+  };
+}
+
+export function useMovieLibrary() {
+  const [library, setLibrary] = useState<MediaLibrary>(emptyLibrary);
+  const [hydrated, setHydrated] = useState(false);
+  /** Bumps when genre backfill skips so the worker effect runs again without waiting on Firestore. */
+  const [genreWorkerTick, setGenreWorkerTick] = useState(0);
+
+  const dbRef = useRef<Firestore | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let watchlistLoaded = false;
+    let watchedLoaded = false;
+    let watchlist: LibraryItem[] = [];
+    let watched: LibraryItem[] = [];
+    let didHydrate = false;
+
+    const forceHydrate = () => {
+      if (didHydrate || cancelled) return;
+      didHydrate = true;
+      setLibrary({ watchlist, watched });
+      setHydrated(true);
+    };
+
+    const normalizeItem = (docId: string, d: unknown): LibraryItem | null => {
+      const obj = d as Record<string, unknown>;
+      if (!obj || typeof obj !== "object") return null;
+      return libraryItemFromFirestore(docId, obj);
+    };
+
+    const maybeHydrate = () => {
+      if (!watchlistLoaded || !watchedLoaded) return;
+      forceHydrate();
+    };
+
+    const run = async () => {
+      await Promise.resolve();
+      try {
+        const { db, auth } = initFirebase();
+        dbRef.current = db;
+
+        await new Promise<void>((resolve, reject) => {
+          const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (firebaseUser) {
+              unsub();
+              resolve();
+              return;
+            }
+            try {
+              await signInAnonymously(auth);
+            } catch (e) {
+              unsub();
+              reject(e);
+            }
+          });
+        });
+
+        const moviesCollectionRef = collection(db, "movies");
+
+        const watchlistQ = query(
+          moviesCollectionRef,
+          where("category", "==", "watchlist"),
+        );
+        const watchedQ = query(
+          moviesCollectionRef,
+          where("category", "==", "watched"),
+        );
+
+        const unsubWatchlist = onSnapshot(
+          watchlistQ,
+          (snap) => {
+            if (cancelled) return;
+            watchlist = dedupeLibraryItemsByIdentity(
+              snap.docs
+                .map((docSnap) =>
+                  normalizeItem(docSnap.id, docSnap.data()),
+                )
+                .filter((m): m is LibraryItem => !!m),
+            );
+            watchlistLoaded = true;
+            maybeHydrate();
+          },
+          (err) => {
+            if (cancelled) return;
+            console.error("Firestore watchlist listener error", err);
+            watchlist = [];
+            watchlistLoaded = true;
+            maybeHydrate();
+          },
+        );
+
+        const unsubWatched = onSnapshot(
+          watchedQ,
+          (snap) => {
+            if (cancelled) return;
+            watched = dedupeLibraryItemsByIdentity(
+              snap.docs
+                .map((docSnap) =>
+                  normalizeItem(docSnap.id, docSnap.data()),
+                )
+                .filter((m): m is LibraryItem => !!m),
+            );
+            watchedLoaded = true;
+            maybeHydrate();
+          },
+          (err) => {
+            if (cancelled) return;
+            console.error("Firestore watched listener error", err);
+            watched = [];
+            watchedLoaded = true;
+            maybeHydrate();
+          },
+        );
+
+        return () => {
+          unsubWatchlist();
+          unsubWatched();
+        };
+      } catch (err) {
+        console.error("Firestore init failed", err);
+        if (!cancelled) {
+          watchlistLoaded = true;
+          watchedLoaded = true;
+          watchlist = [];
+          watched = [];
+          forceHydrate();
+        }
+        return () => {};
+      }
+    };
+
+    let cleanup: undefined | (() => void);
+    void run().then((c) => {
+      cleanup = c ?? undefined;
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      watchlistLoaded = true;
+      watchedLoaded = true;
+      forceHydrate();
+    }, 5_000);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      cleanup?.();
+    };
+  }, []);
+
+  const saveMovie = useMemo(
+    () => (item: LibraryItem, category: LibraryCategory) => {
+      const db = dbRef.current;
+      if (!db) return;
+
+      setLibrary((prev) => moveMovieInLibrary(prev, item, category));
+
+      const docRef = doc(db, "movies", item.docId);
+      const data = itemToFirestoreData(item, category);
+
+      void setDoc(docRef, data, { merge: false }).catch((err) => {
+        console.error("Firestore saveMovie failed", err);
+      });
+    },
+    [],
+  );
+
+  const removeMovie = useMemo(
+    () => (docId: string) => {
+      const db = dbRef.current;
+      if (!db) return;
+
+      setLibrary((prev) => removeMovieFromLibrary(prev, docId));
+
+      const docRef = doc(db, "movies", docId);
+      void deleteDoc(docRef).catch((err) => {
+        console.error("Firestore removeMovie failed", err);
+      });
+    },
+    [],
+  );
+
+  const moveMovie = useMemo(
+    () => (item: LibraryItem, toCategory: LibraryCategory) => {
+      const db = dbRef.current;
+      if (!db) return;
+
+      setLibrary((prev) => moveMovieInLibrary(prev, item, toCategory));
+
+      const docRef = doc(db, "movies", item.docId);
+      const data = itemToFirestoreData(item, toCategory);
+
+      void setDoc(docRef, data, { merge: false }).catch((err) => {
+        console.error("Firestore moveMovie failed", err);
+      });
+    },
+    [],
+  );
+
+  const patchLibraryItem = useCallback(
+    (docId: string, patch: Partial<LibraryItem>) => {
+      setLibrary((prev) => {
+        const r = applyPatchToLibrary(prev, docId, patch);
+        if (!r) return prev;
+        const db = dbRef.current;
+        if (db) {
+          queueMicrotask(() => {
+            void setDoc(doc(db, "movies", docId), itemToFirestoreData(r.item, r.category), {
+              merge: false,
+            }).catch((err) => {
+              console.error("Firestore patchLibraryItem failed", err);
+            });
+          });
+        }
+        return r.nextLib;
+      });
+    },
+    [],
+  );
+
+  /** Skip TMDB retry after empty/error; awaiting = reserved slot or patch written, waiting for snapshot. */
+  const genreSkipRef = useRef(new Set<string>());
+  const genreAwaitingRef = useRef(new Set<string>());
+  const genreAwaitSinceRef = useRef(new Map<string, number>());
+
+  const backfillMissingGenres = useCallback(
+    async (opts?: { maxItems?: number; clearSkipped?: boolean }) => {
+      if (opts?.clearSkipped) {
+        genreSkipRef.current.clear();
+        genreAwaitingRef.current.clear();
+        genreAwaitSinceRef.current.clear();
+        setGenreWorkerTick((x) => x + 1);
+      }
+      const maxItems = opts?.maxItems ?? 80;
+      let updated = 0;
+      let failed = 0;
+
+      const candidates: LibraryItem[] = [];
+      for (const item of library.watchlist) {
+        if (isTmdbItemMissingGenres(item)) candidates.push(item);
+      }
+      for (const item of library.watched) {
+        if (isTmdbItemMissingGenres(item)) candidates.push(item);
+      }
+
+      const slice = candidates.slice(0, maxItems);
+      for (const item of slice) {
+        try {
+          const d =
+            item.mediaType === "movie"
+              ? await tmdbGetMovieDetails(item.tmdbId!)
+              : await tmdbGetTvDetails(item.tmdbId!);
+          if (d.genre_ids.length > 0) {
+            patchLibraryItem(item.docId, {
+              genreIds: [...d.genre_ids],
+            });
+            genreAwaitingRef.current.add(item.docId);
+            genreAwaitSinceRef.current.set(item.docId, Date.now());
+            updated++;
+          } else {
+            genreSkipRef.current.add(item.docId);
+          }
+        } catch {
+          failed++;
+          genreSkipRef.current.add(item.docId);
+        }
+        await new Promise((r) => setTimeout(r, 320));
+      }
+
+      return {
+        updated,
+        failed,
+        skipped: Math.max(0, candidates.length - slice.length),
+      };
+    },
+    [library.watchlist, library.watched, patchLibraryItem, setGenreWorkerTick],
+  );
+
+  /** One title at a time: reserve → TMDB fetch → patch → wait for snapshot (or timeout). */
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const combined = [...library.watchlist, ...library.watched];
+    const now = Date.now();
+    let timedOutAny = false;
+
+    for (const id of [...genreAwaitingRef.current]) {
+      const row = combined.find((x) => x.docId === id);
+      if (row?.genreIds?.length) {
+        genreAwaitingRef.current.delete(id);
+        genreAwaitSinceRef.current.delete(id);
+        continue;
+      }
+      const t0 = genreAwaitSinceRef.current.get(id);
+      if (t0 && now - t0 > 25_000) {
+        genreAwaitingRef.current.delete(id);
+        genreAwaitSinceRef.current.delete(id);
+        genreSkipRef.current.add(id);
+        timedOutAny = true;
+        console.warn("[movieNight] genre snapshot timeout, skipping", id);
+      }
+    }
+    if (timedOutAny) {
+      setGenreWorkerTick((x) => x + 1);
+    }
+
+    const next = combined.find((i) => {
+      if (!isTmdbItemMissingGenres(i)) return false;
+      if (genreSkipRef.current.has(i.docId)) return false;
+      if (genreAwaitingRef.current.has(i.docId)) return false;
+      return true;
+    });
+    if (!next) return;
+
+    genreAwaitingRef.current.add(next.docId);
+    genreAwaitSinceRef.current.set(next.docId, Date.now());
+
+    void (async () => {
+      try {
+        const d =
+          next.mediaType === "movie"
+            ? await tmdbGetMovieDetails(next.tmdbId!)
+            : await tmdbGetTvDetails(next.tmdbId!);
+        if (d.genre_ids.length > 0) {
+          patchLibraryItem(next.docId, { genreIds: [...d.genre_ids] });
+        } else {
+          genreAwaitingRef.current.delete(next.docId);
+          genreAwaitSinceRef.current.delete(next.docId);
+          genreSkipRef.current.add(next.docId);
+          setGenreWorkerTick((x) => x + 1);
+        }
+      } catch (e) {
+        console.warn("[movieNight] auto genre backfill failed", next.docId, e);
+        genreAwaitingRef.current.delete(next.docId);
+        genreAwaitSinceRef.current.delete(next.docId);
+        genreSkipRef.current.add(next.docId);
+        setGenreWorkerTick((x) => x + 1);
+      }
+    })();
+  }, [
+    hydrated,
+    library.watchlist,
+    library.watched,
+    patchLibraryItem,
+    genreWorkerTick,
+  ]);
+
+  return {
+    library,
+    hydrated,
+    saveMovie,
+    removeMovie,
+    moveMovie,
+    patchLibraryItem,
+    backfillMissingGenres,
+  };
+}
+</file>
+
 <file path="app/page.tsx">
 "use client";
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRef, useState } from "react";
+import SaveMoviePromptModal from "../components/SaveMoviePromptModal";
+import WatchlistCardRatingsRow from "../components/WatchlistCardRatingsRow";
 import {
   PassedRibbon,
   WatchlistGroupControls,
 } from "../components/WatchlistGroupControls";
+import { useAuth } from "../hooks/useAuth";
 import { useMovieLibrary } from "../hooks/useMovieLibrary";
 import {
+  categoryLabels,
+  copyGenreIdsForPersist,
+  mergeWatchedRatingPatch,
   recommendedByLabel,
   calculateGroupAverage,
   youtubeVideoIdFromUrl,
+  type LibraryCategory,
+  type LibraryItem,
 } from "../lib/movieLibrary";
+import {
+  everyoneHasSeenIt,
+  normalizeSeenIt,
+  seenPersonForMovieNightUser,
+  setSeenTrueForPerson,
+} from "../lib/watchlistGroup";
 
 const posterBase = "https://image.tmdb.org/t/p/w500";
 
@@ -5803,7 +6344,22 @@ function resetAllSearchState() {
 }
 
 export default function Home() {
-  const { hydrated, library, removeMovie, patchLibraryItem } = useMovieLibrary();
+  const { user } = useAuth();
+  const {
+    hydrated,
+    library,
+    removeMovie,
+    patchLibraryItem,
+    moveMovie,
+  } = useMovieLibrary();
+
+  const [savePromptOpen, setSavePromptOpen] = useState(false);
+  const [savePromptCategory, setSavePromptCategory] =
+    useState<LibraryCategory | null>(null);
+  const [savePromptMovie, setSavePromptMovie] = useState<LibraryItem | null>(
+    null,
+  );
+  const [toast, setToast] = useState<string | null>(null);
 
   const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -5837,6 +6393,27 @@ export default function Home() {
       setUndoMessage(null);
       deleteTimerRef.current = null;
     }, 2200);
+  }
+
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(null), 2500);
+  }
+
+  /** When the third person marks “seen” on the watchlist, open ratings → Watched. */
+  function promoteIfWatchlistEveryoneSeen(
+    movieBefore: LibraryItem,
+    nextItem: LibraryItem,
+  ) {
+    const onWl = library.watchlist.some((m) => m.docId === movieBefore.docId);
+    if (!onWl) return;
+    const wasAll = everyoneHasSeenIt(movieBefore);
+    const nowAll = everyoneHasSeenIt(nextItem);
+    if (!wasAll && nowAll) {
+      setSavePromptCategory("watched");
+      setSavePromptMovie(nextItem);
+      setSavePromptOpen(true);
+    }
   }
 
   function undoDelete() {
@@ -6072,11 +6649,12 @@ export default function Home() {
                               disabled={!hydrated}
                               compact
                               showPass={false}
-                              onPatch={(next) =>
+                              onPatch={(next) => {
                                 patchLibraryItem(movie.docId, {
                                   seenIt: next.seenIt,
-                                })
-                              }
+                                });
+                                promoteIfWatchlistEveryoneSeen(movie, next);
+                              }}
                             />
 
                             <RecommendedByFooter name={by} />
@@ -6094,7 +6672,9 @@ export default function Home() {
           <div>
             <h2 className="text-2xl font-semibold tracking-tight">Watchlist</h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Saved titles you have not watched yet.
+              Tap Watched to rate. The title stays here until Alex, Britton, and
+              Nabi have all marked watched (Watched or A/B/N), then it moves to
+              Recently Watched.
             </p>
           </div>
 
@@ -6222,14 +6802,49 @@ export default function Home() {
                             disabled={!hydrated}
                             compact
                             showPass
-                            onPatch={(next) =>
+                            onPatch={(next) => {
                               patchLibraryItem(movie.docId, {
                                 seenIt: next.seenIt,
                                 passed: next.passed,
                                 passedBy: next.passedBy,
-                              })
-                            }
+                              });
+                              promoteIfWatchlistEveryoneSeen(movie, next);
+                            }}
                           />
+
+                          <WatchlistCardRatingsRow item={movie} compact />
+
+                          <button
+                            type="button"
+                            disabled={!hydrated || !user}
+                            title={
+                              !user
+                                ? "Sign in from the header to mark as watched"
+                                : undefined
+                            }
+                            onClick={() => {
+                              if (!user) return;
+                              const person = seenPersonForMovieNightUser(
+                                user.name,
+                              );
+                              const baseline = normalizeSeenIt(movie);
+                              const nextForModal = setSeenTrueForPerson(
+                                movie,
+                                person,
+                              );
+                              if (!baseline[person]) {
+                                patchLibraryItem(movie.docId, {
+                                  seenIt: nextForModal.seenIt,
+                                });
+                              }
+                              setSavePromptCategory("watched");
+                              setSavePromptMovie(nextForModal);
+                              setSavePromptOpen(true);
+                            }}
+                            className="w-full min-h-[44px] rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+                          >
+                            Watched
+                          </button>
 
                           <RecommendedByFooter name={by} />
                         </div>
@@ -6241,6 +6856,85 @@ export default function Home() {
           )}
         </section>
       </div>
+
+      <SaveMoviePromptModal
+        open={savePromptOpen}
+        category={savePromptCategory}
+        ratedByUserName={user?.name ?? null}
+        ratingBaseItem={savePromptMovie}
+        onCancel={() => {
+          setSavePromptOpen(false);
+          setSavePromptCategory(null);
+          setSavePromptMovie(null);
+        }}
+        onSave={(args) => {
+          if (!savePromptMovie || !savePromptCategory) return;
+          if (!user) return;
+
+          if (savePromptCategory === "watched") {
+            const live =
+              library.watchlist.find(
+                (m) => m.docId === savePromptMovie.docId,
+              ) ??
+              library.watched.find((m) => m.docId === savePromptMovie.docId) ??
+              savePromptMovie;
+
+            const merged = setSeenTrueForPerson(
+              {
+                ...live,
+                genreIds: copyGenreIdsForPersist(savePromptMovie),
+                recommendedBy: user.name,
+                ...mergeWatchedRatingPatch(live, args),
+              },
+              seenPersonForMovieNightUser(user.name),
+            );
+
+            const stillOnWatchlist = library.watchlist.some(
+              (m) => m.docId === merged.docId,
+            );
+
+            if (stillOnWatchlist && !everyoneHasSeenIt(merged)) {
+              patchLibraryItem(merged.docId, {
+                seenIt: merged.seenIt,
+                alexRating: merged.alexRating,
+                brittonRating: merged.brittonRating,
+                nabiRating: merged.nabiRating,
+                groupRatings: merged.groupRatings,
+              });
+              showToast(
+                "Rating saved on your watchlist. It moves to Watched when everyone has watched.",
+              );
+            } else {
+              moveMovie(merged, "watched");
+              showToast(`Moved to ${categoryLabels.watched}.`);
+            }
+          } else {
+            const nextMovie: LibraryItem = {
+              ...savePromptMovie,
+              genreIds: copyGenreIdsForPersist(savePromptMovie),
+              recommendedBy: user.name,
+              alexRating: null,
+              brittonRating: null,
+              nabiRating: null,
+              groupRatings: undefined,
+            };
+            moveMovie(nextMovie, savePromptCategory);
+            showToast(
+              `Moved to ${categoryLabels[savePromptCategory]}.`,
+            );
+          }
+
+          setSavePromptOpen(false);
+          setSavePromptCategory(null);
+          setSavePromptMovie(null);
+        }}
+      />
+
+      {toast ? (
+        <div className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900">
+          {toast}
+        </div>
+      ) : null}
 
       {undoMessage ? (
         <div className="fixed bottom-5 left-1/2 z-[65] -translate-x-1/2 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900">

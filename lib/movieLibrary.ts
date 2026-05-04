@@ -24,7 +24,7 @@ export type LibraryItem = {
   alexRating?: number | null;
   brittonRating?: number | null;
   nabiRating?: number | null;
-  /** Watchlist: who has seen the trailer / is ready (group tracking). */
+  /** Watchlist: who has finished watching; when all three are true, the title can move to Watched. */
   seenIt?: {
     alex: boolean;
     britton: boolean;
@@ -80,6 +80,89 @@ export function libraryItemDocId(
   tmdbId: number,
 ): string {
   return `${mediaType}_${tmdbId}`;
+}
+
+/** Same logical title: exact doc id, or same TMDB movie/tv id (misc: doc id only). */
+export function libraryItemsShareIdentity(a: LibraryItem, b: LibraryItem): boolean {
+  if (a.docId === b.docId) return true;
+  if (a.mediaType === "misc" || b.mediaType === "misc") return false;
+  const ta = a.tmdbId;
+  const tb = b.tmdbId;
+  if (typeof ta !== "number" || typeof tb !== "number") return false;
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return false;
+  return a.mediaType === b.mediaType && ta === tb;
+}
+
+function tmdbRowHasCanonicalDocId(item: LibraryItem): boolean {
+  if (item.mediaType === "misc") return item.docId.startsWith("misc_");
+  if (item.tmdbId == null || !Number.isFinite(item.tmdbId)) return false;
+  return item.docId === libraryItemDocId(item.mediaType, item.tmdbId);
+}
+
+/**
+ * Collapse duplicate TMDB rows (e.g. legacy numeric Firestore id vs movie_123).
+ * Prefers canonical doc ids and merges common fields.
+ */
+export function dedupeLibraryItemsByIdentity(items: LibraryItem[]): LibraryItem[] {
+  const out: LibraryItem[] = [];
+  for (const item of items) {
+    const j = out.findIndex((m) => libraryItemsShareIdentity(m, item));
+    if (j < 0) {
+      out.push(item);
+      continue;
+    }
+    const existing = out[j]!;
+    const preferIncoming =
+      tmdbRowHasCanonicalDocId(item) && !tmdbRowHasCanonicalDocId(existing);
+    const preferExisting =
+      tmdbRowHasCanonicalDocId(existing) && !tmdbRowHasCanonicalDocId(item);
+    const primary = preferIncoming ? item : preferExisting ? existing : item;
+    const secondary = primary === item ? existing : item;
+
+    const mergedSeen = {
+      alex: Boolean(primary.seenIt?.alex || secondary.seenIt?.alex),
+      britton: Boolean(primary.seenIt?.britton || secondary.seenIt?.britton),
+      nabi: Boolean(primary.seenIt?.nabi || secondary.seenIt?.nabi),
+    };
+
+    const mt = primary.mediaType;
+    const tid = primary.tmdbId;
+    const mergedDocId =
+      mt !== "misc" && typeof tid === "number" && Number.isFinite(tid)
+        ? libraryItemDocId(mt, tid)
+        : primary.docId;
+
+    out[j] = {
+      ...primary,
+      docId: mergedDocId,
+      genreIds:
+        primary.genreIds && primary.genreIds.length > 0
+          ? primary.genreIds
+          : secondary.genreIds,
+      recommendedBy: primary.recommendedBy ?? secondary.recommendedBy,
+      alexRating: primary.alexRating ?? secondary.alexRating,
+      brittonRating: primary.brittonRating ?? secondary.brittonRating,
+      nabiRating: primary.nabiRating ?? secondary.nabiRating,
+      groupRatings: primary.groupRatings ?? secondary.groupRatings,
+      seenIt: mergedSeen,
+      passed: Boolean(primary.passed || secondary.passed),
+      passedBy: primary.passedBy ?? secondary.passedBy,
+    };
+  }
+  return out;
+}
+
+export function itemPlacementInLibrary(
+  library: MediaLibrary,
+  item: LibraryItem,
+): "watchlist" | "watched" | null {
+  if (library.watchlist.some((m) => libraryItemsShareIdentity(m, item))) {
+    return "watchlist";
+  }
+  if (library.watched.some((m) => libraryItemsShareIdentity(m, item))) {
+    return "watched";
+  }
+  return null;
 }
 
 /**
@@ -241,21 +324,78 @@ export function isTmdbItemMissingGenres(item: LibraryItem): boolean {
   return !item.genreIds?.length;
 }
 
+/** Partial ratings from the “mark watched” flow (only the signed-in user’s key is set). */
+export type WatchedRatingPatch = {
+  alexRating?: number | null;
+  brittonRating?: number | null;
+  nabiRating?: number | null;
+};
+
+export type WatchedPerson = "alex" | "britton" | "nabi";
+
+export function getPersonWatchedRating(
+  item: LibraryItem | null | undefined,
+  person: WatchedPerson,
+): number | null {
+  if (!item) return null;
+  const top =
+    person === "alex"
+      ? item.alexRating
+      : person === "britton"
+        ? item.brittonRating
+        : item.nabiRating;
+  if (typeof top === "number" && top >= 1 && top <= 10) return top;
+  const g = item.groupRatings?.[person];
+  if (typeof g === "number" && g >= 1 && g <= 10) return g;
+  return null;
+}
+
+/** Merges a partial patch with existing row data so one person can save without wiping others’ ratings. */
+export function mergeWatchedRatingPatch(
+  base: LibraryItem,
+  patch: WatchedRatingPatch,
+): {
+  alexRating: number | null;
+  brittonRating: number | null;
+  nabiRating: number | null;
+  groupRatings: {
+    alex: number | null;
+    britton: number | null;
+    nabi: number | null;
+  };
+} {
+  const alex =
+    patch.alexRating !== undefined
+      ? patch.alexRating
+      : getPersonWatchedRating(base, "alex");
+  const britton =
+    patch.brittonRating !== undefined
+      ? patch.brittonRating
+      : getPersonWatchedRating(base, "britton");
+  const nabi =
+    patch.nabiRating !== undefined
+      ? patch.nabiRating
+      : getPersonWatchedRating(base, "nabi");
+  return {
+    alexRating: alex,
+    brittonRating: britton,
+    nabiRating: nabi,
+    groupRatings: { alex, britton, nabi },
+  };
+}
+
+/** Mean of valid 1–10 ratings only; omits people who have not rated yet. */
 export function calculateGroupAverage(
   alex: number | null | undefined,
   britton: number | null | undefined,
   nabi: number | null | undefined,
 ) {
-  const a =
-    typeof alex === "number" && alex >= 1 && alex <= 10 ? alex : null;
-  const b =
-    typeof britton === "number" && britton >= 1 && britton <= 10
-      ? britton
-      : null;
-  const c =
-    typeof nabi === "number" && nabi >= 1 && nabi <= 10 ? nabi : null;
-  if (a === null || b === null || c === null) return null;
-  const avg = (a + b + c) / 3;
+  const scores: number[] = [];
+  for (const v of [alex, britton, nabi]) {
+    if (typeof v === "number" && v >= 1 && v <= 10) scores.push(v);
+  }
+  if (scores.length === 0) return null;
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
   return Math.round(avg * 10) / 10;
 }
 
@@ -500,8 +640,17 @@ export function moveMovieInLibrary(
   item: LibraryItem,
   toCategory: LibraryCategory,
 ): MediaLibrary {
+  const notSame = (m: LibraryItem) => !libraryItemsShareIdentity(m, item);
+
   if (toCategory === "watchlist") {
     const cleared: LibraryItem = { ...item };
+    if (
+      cleared.mediaType !== "misc" &&
+      typeof cleared.tmdbId === "number" &&
+      Number.isFinite(cleared.tmdbId)
+    ) {
+      cleared.docId = libraryItemDocId(cleared.mediaType, cleared.tmdbId);
+    }
     delete cleared.groupRatings;
     delete cleared.alexRating;
     delete cleared.brittonRating;
@@ -510,17 +659,21 @@ export function moveMovieInLibrary(
     cleared.passed = false;
     cleared.passedBy = undefined;
     return {
-      watchlist: [
-        ...library.watchlist.filter((m) => m.docId !== item.docId),
-        cleared,
-      ],
-      watched: library.watched.filter((m) => m.docId !== item.docId),
+      watchlist: [...library.watchlist.filter(notSame), cleared],
+      watched: library.watched.filter(notSame),
     };
   }
 
+  const placed: LibraryItem =
+    item.mediaType !== "misc" &&
+    typeof item.tmdbId === "number" &&
+    Number.isFinite(item.tmdbId)
+      ? { ...item, docId: libraryItemDocId(item.mediaType, item.tmdbId) }
+      : item;
+
   return {
-    watchlist: library.watchlist.filter((m) => m.docId !== item.docId),
-    watched: [...library.watched.filter((m) => m.docId !== item.docId), item],
+    watchlist: library.watchlist.filter(notSame),
+    watched: [...library.watched.filter(notSame), placed],
   };
 }
 
@@ -528,9 +681,20 @@ export function removeMovieFromLibrary(
   library: MediaLibrary,
   docId: string,
 ): MediaLibrary {
+  const target =
+    library.watchlist.find((m) => m.docId === docId) ??
+    library.watched.find((m) => m.docId === docId) ??
+    null;
+  if (!target) {
+    return {
+      watchlist: library.watchlist.filter((m) => m.docId !== docId),
+      watched: library.watched.filter((m) => m.docId !== docId),
+    };
+  }
+  const notMatch = (m: LibraryItem) => !libraryItemsShareIdentity(m, target);
   return {
-    watchlist: library.watchlist.filter((m) => m.docId !== docId),
-    watched: library.watched.filter((m) => m.docId !== docId),
+    watchlist: library.watchlist.filter(notMatch),
+    watched: library.watched.filter(notMatch),
   };
 }
 

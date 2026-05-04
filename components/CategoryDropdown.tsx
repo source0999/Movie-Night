@@ -31,29 +31,33 @@ export default function CategoryDropdown({
   useEffect(() => {
     if (!open) return;
 
-    const onDocMouseDown = (e: MouseEvent) => {
+    const close = (e: MouseEvent | TouchEvent) => {
       const el = rootRef.current;
       if (!el) return;
-      if (!e.target) return;
-      if (el.contains(e.target as Node)) return;
+      const t = e.target;
+      if (!t || !(t instanceof Node)) return;
+      if (el.contains(t)) return;
       setOpen(false);
     };
 
-    document.addEventListener("mousedown", onDocMouseDown);
-    return () => document.removeEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("touchstart", close, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+    };
   }, [open]);
 
   return (
-    <div
-      ref={rootRef}
-      className={`relative ${open ? "z-[9999]" : ""}`}
-    >
+    <div ref={rootRef} className={`relative ${open ? "z-[9999]" : ""}`}>
       <button
         type="button"
         onClick={() => !disabled && setOpen((v) => !v)}
         disabled={disabled}
+        aria-expanded={open}
+        aria-haspopup="listbox"
         aria-disabled={disabled}
-        className="min-h-[44px] rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+        className="mn-btn-press min-h-[44px] rounded-xl border border-mn-border bg-mn-input px-4 py-3 text-sm font-medium text-mn-fg shadow-sm hover:bg-mn-card-elev"
       >
         {summaryLabel}
       </button>
@@ -61,18 +65,21 @@ export default function CategoryDropdown({
       {open ? (
         <div
           style={menuStyle}
-          className="absolute z-[9999] mt-2 w-64 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900"
+          role="listbox"
+          className="mn-modal-panel-animate absolute z-[9999] mt-2 w-64 overflow-hidden rounded-xl border border-mn-border bg-mn-modal shadow-[var(--mn-shadow-soft)]"
         >
           <div className="p-2">
             {options.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
+                role="option"
+                aria-selected={false}
                 onClick={() => {
                   onSelect(opt.value);
                   setOpen(false);
                 }}
-                className="w-full min-h-[44px] rounded-lg px-4 py-3 text-left text-sm text-zinc-900 hover:bg-zinc-100 dark:text-zinc-50 dark:hover:bg-zinc-800"
+                className="w-full min-h-[44px] rounded-lg px-4 py-3 text-left text-sm text-mn-fg transition hover:bg-mn-input"
               >
                 {opt.label}
               </button>
@@ -83,4 +90,3 @@ export default function CategoryDropdown({
     </div>
   );
 }
-

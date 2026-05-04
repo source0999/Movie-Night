@@ -66,6 +66,35 @@ function useSpinClickSound(spinning: boolean, durationMs: number) {
 
 type Phase = "idle" | "spinning" | "spotlight";
 
+function MarqueeRail({
+  active,
+  fast,
+}: {
+  active: boolean;
+  fast: boolean;
+}) {
+  const trackClass = !active
+    ? "mn-marquee-track mn-marquee-track--paused"
+    : fast
+      ? "mn-marquee-track mn-marquee-track--fast"
+      : "mn-marquee-track";
+  return (
+    <div
+      className="h-1 w-full shrink-0 overflow-hidden bg-mn-input/60 sm:h-1.5"
+      aria-hidden
+    >
+      <div className={`flex w-max gap-2 px-1 py-0.5 ${trackClass}`}>
+        {Array.from({ length: 56 }).map((_, i) => (
+          <span
+            key={i}
+            className="inline-block h-1 w-1 shrink-0 rounded-full bg-mn-accent opacity-75"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RoulettePosterCard({
   item,
   spotlight,
@@ -79,13 +108,16 @@ function RoulettePosterCard({
   className?: string;
 }) {
   const src = libraryItemCoverImageUrl(item);
-  const frame =
-    unframed
-      ? "rounded-none border-0 shadow-none"
-      : "rounded-2xl border-2 border-zinc-200 bg-zinc-200 shadow-xl dark:border-zinc-700 dark:bg-zinc-800";
+  const frame = unframed
+    ? "rounded-none border-0 shadow-none"
+    : "rounded-2xl border-2 border-mn-border bg-mn-input shadow-xl";
   return (
     <div
-      className={`relative aspect-[2/3] overflow-hidden bg-zinc-200 transition dark:bg-zinc-800 ${frame} ${spotlight && !unframed ? "border-cyan-400 shadow-[0_0_36px_rgba(34,211,238,0.45)] dark:border-cyan-400" : ""} ${spotlight && unframed ? "ring-2 ring-cyan-400 ring-inset" : ""} ${className}`}
+      className={`relative aspect-[2/3] overflow-hidden bg-mn-input transition ${frame} ${
+        spotlight && !unframed
+          ? "border-mn-accent shadow-[0_0_0_2px_var(--mn-accent),0_0_32px_var(--mn-glow)] mn-spotlight-pulse"
+          : ""
+      } ${spotlight && unframed ? "ring-2 ring-mn-accent ring-inset mn-spotlight-pulse" : ""} ${className}`}
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -96,7 +128,7 @@ function RoulettePosterCard({
           draggable={false}
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-900/50 to-zinc-800 p-3 text-center text-sm font-bold text-zinc-100">
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-mn-accent/30 to-mn-card-elev p-3 text-center text-sm font-bold text-mn-fg">
           {item ? clampText(item.title, 24) : "—"}
         </div>
       )}
@@ -105,7 +137,7 @@ function RoulettePosterCard({
 }
 
 const SPIN_BTN =
-  "min-h-[52px] w-full max-w-xs rounded-2xl px-8 text-base font-bold shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 dark:focus-visible:ring-offset-zinc-900";
+  "mn-btn-press touch-manipulation min-h-[56px] w-full max-w-xs rounded-2xl px-8 text-base font-bold shadow-[var(--mn-shadow-soft)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-mn-focus focus-visible:ring-offset-2 focus-visible:ring-offset-mn-bg disabled:cursor-not-allowed disabled:opacity-55";
 
 /** Slot-machine style picker when the wheel would be too crowded. */
 export function ListShufflePicker({
@@ -119,15 +151,48 @@ export function ListShufflePicker({
   const [displayIndex, setDisplayIndex] = useState(0);
   const [winnerIdx, setWinnerIdx] = useState<number | null>(null);
   const [totalMs, setTotalMs] = useState(3200);
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    queueMicrotask(() => setReducedMotion(mq.matches));
+    const fn = () => setReducedMotion(mq.matches);
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
 
   useSpinClickSound(phase === "spinning", totalMs);
 
   const canSpin = slots.length >= 2 && phase === "idle";
   const segmentCount = slots.length;
 
+  const idleFan = useMemo(() => {
+    if (slots.length === 0) return [];
+    const b = slots[1 % segmentCount]!;
+    const c = slots[2 % segmentCount]!;
+    return [b, c];
+  }, [slots, segmentCount]);
+
   const onSpin = () => {
     if (!canSpin) return;
     const wIdx = Math.floor(Math.random() * segmentCount);
+
+    if (reducedMotion) {
+      setWinnerIdx(wIdx);
+      setDisplayIndex(wIdx);
+      setTotalMs(700);
+      setPhase("spinning");
+      window.setTimeout(() => {
+        setPhase("spotlight");
+        window.setTimeout(() => {
+          onWinner(slots[wIdx]!);
+          setPhase("idle");
+          setWinnerIdx(null);
+        }, 1100);
+      }, 700);
+      return;
+    }
+
     const durationMs = 2800 + Math.floor(Math.random() * 900);
     setTotalMs(durationMs);
     setPhase("spinning");
@@ -168,9 +233,7 @@ export function ListShufflePicker({
   };
 
   const current =
-    slots[displayIndex] ??
-    slots[0] ??
-    slots.find(Boolean);
+    slots[displayIndex] ?? slots[0] ?? slots.find(Boolean);
   const isSpot = phase === "spotlight" && winnerIdx === displayIndex;
   const bgSrc = libraryItemCoverImageUrl(current);
 
@@ -179,10 +242,12 @@ export function ListShufflePicker({
       <div
         className={`relative w-full overflow-hidden rounded-2xl border-2 text-center shadow-xl transition sm:flex sm:min-h-[min(360px,52vw)] sm:text-left ${
           isSpot
-            ? "border-cyan-400 bg-zinc-900 shadow-[0_0_40px_rgba(34,211,238,0.35)]"
-            : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/70"
+            ? "border-mn-accent bg-mn-card-elev shadow-[0_0_0_2px_var(--mn-accent),0_0_32px_var(--mn-glow)]"
+            : "border-mn-border bg-mn-card"
         }`}
       >
+        <MarqueeRail active={phase !== "idle"} fast={phase === "spinning"} />
+
         {phase === "spinning" || phase === "spotlight" ? (
           <div
             className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-300 ${
@@ -193,41 +258,65 @@ export function ListShufflePicker({
 
         <div className="relative flex w-full flex-col sm:flex-row sm:items-stretch">
           <div className="relative mx-auto aspect-[2/3] w-[min(280px,88vw)] shrink-0 sm:mx-0 sm:w-[48%] sm:max-w-[280px]">
-            <RoulettePosterCard
-              item={current}
-              spotlight={isSpot}
-              unframed
-              className="h-full w-full sm:rounded-l-xl"
-            />
+            {phase === "idle" && idleFan.length >= 2 ? (
+              <div
+                className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"
+                aria-hidden
+              >
+                <div className="absolute left-1/2 top-1/2 w-[78%] -translate-x-1/2 -translate-y-1/2 -rotate-[8deg] scale-[0.82] opacity-35">
+                  <RoulettePosterCard item={idleFan[0]} unframed />
+                </div>
+                <div className="absolute left-1/2 top-1/2 w-[78%] -translate-x-1/2 -translate-y-1/2 rotate-[8deg] scale-[0.82] opacity-35">
+                  <RoulettePosterCard item={idleFan[1]} unframed />
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              className={`relative z-10 h-full w-full ${
+                phase === "spinning" ? "mn-spin-jitter blur-[0.6px]" : ""
+              }`}
+            >
+              <RoulettePosterCard
+                item={current}
+                spotlight={isSpot}
+                unframed
+                className="h-full w-full sm:rounded-l-xl"
+              />
+            </div>
           </div>
 
           <div className="relative flex flex-1 flex-col justify-center px-5 py-8 sm:py-6">
             {bgSrc ? (
               <div
-                className="pointer-events-none absolute inset-0 opacity-[0.18] dark:opacity-[0.22]"
+                className="pointer-events-none absolute inset-0 opacity-[0.14]"
                 aria-hidden
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={bgSrc}
                   alt=""
-                  className="h-full w-full object-cover blur-2xl scale-110"
+                  className="h-full w-full scale-110 object-cover blur-2xl"
                 />
               </div>
             ) : null}
 
             <p
               className={`relative z-20 text-[10px] font-bold uppercase tracking-[0.2em] ${
-                isSpot ? "text-cyan-200/90" : "text-zinc-500 dark:text-zinc-400"
+                isSpot ? "text-mn-accent" : "text-mn-fg-muted"
               }`}
             >
-              List shuffle
+              {phase === "spinning"
+                ? "Shuffling…"
+                : phase === "spotlight"
+                  ? "Spotlight"
+                  : "Ready to spin"}
             </p>
             <p
               className={`relative z-20 mt-3 min-h-[4.5rem] text-xl font-bold leading-tight sm:text-2xl ${
                 isSpot
-                  ? "text-white drop-shadow-[0_0_12px_rgba(34,211,238,0.5)]"
-                  : "text-zinc-900 dark:text-zinc-50"
+                  ? "text-mn-fg drop-shadow-[0_0_12px_var(--mn-glow)]"
+                  : "text-mn-fg"
               }`}
               style={{
                 fontFamily: "var(--font-orbitron), system-ui, sans-serif",
@@ -237,20 +326,22 @@ export function ListShufflePicker({
             </p>
             <p
               className={`relative z-20 mt-3 text-xs ${
-                isSpot ? "text-zinc-300" : "text-zinc-500 dark:text-zinc-400"
+                isSpot ? "text-mn-fg-muted" : "text-mn-fg-muted"
               }`}
             >
               {segmentCount} in the mix
             </p>
           </div>
         </div>
+
+        <MarqueeRail active={phase !== "idle"} fast={phase === "spinning"} />
       </div>
 
       <button
         type="button"
         onClick={onSpin}
         disabled={!canSpin}
-        className={`${SPIN_BTN} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-100`}
+        className={`${SPIN_BTN} bg-mn-accent text-mn-bg hover:opacity-95`}
       >
         {phase === "spinning"
           ? "Shuffling…"

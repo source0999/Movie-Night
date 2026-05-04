@@ -7,11 +7,16 @@ import CategoryDropdown from "./CategoryDropdown";
 import { useMovieLibrary } from "../hooks/useMovieLibrary";
 import {
   categoryLabels,
-  copyGenreIdsForPersist,
+  itemPlacementInLibrary,
   libraryItemFromTmdbHit,
+  mergeWatchedRatingPatch,
   type LibraryCategory,
   type LibraryItem,
 } from "../lib/movieLibrary";
+import {
+  seenPersonForMovieNightUser,
+  setSeenTrueForPerson,
+} from "../lib/watchlistGroup";
 import SaveMoviePromptModal from "./SaveMoviePromptModal";
 import MovieCard from "./MovieCard";
 import { useAuth } from "../hooks/useAuth";
@@ -21,11 +26,36 @@ import {
   futuristicSearchButtonClass,
   futuristicSearchInputClass,
 } from "./FuturisticSearchBar";
+import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 
 const SAVE_OPTIONS: Array<{ value: LibraryCategory; label: string }> = [
   { value: "watchlist", label: categoryLabels.watchlist },
   { value: "watched", label: categoryLabels.watched },
 ];
+
+function shouldBlockDuplicateSave(
+  category: LibraryCategory,
+  placement: "watchlist" | "watched" | null,
+): boolean {
+  if (!placement) return false;
+  if (category === "watchlist" && placement === "watchlist") return true;
+  if (category === "watchlist" && placement === "watched") return true;
+  if (category === "watched" && placement === "watched") return true;
+  return false;
+}
+
+function messageForBlockedDuplicateSave(
+  category: LibraryCategory,
+  placement: "watchlist" | "watched" | null,
+): string {
+  if (category === "watchlist" && placement === "watchlist") {
+    return "This title is already on your Watchlist. Remove it there first if you want to add it again from search.";
+  }
+  if (category === "watchlist" && placement === "watched") {
+    return "This title is already in Watched. Use My Library → Watched to move it to your Watchlist if you want it there — it can’t be added again from search.";
+  }
+  return "This title is already in Watched. You can change it from My Library.";
+}
 
 function releaseYear(releaseDate: string | null) {
   if (!releaseDate) return null;
@@ -98,8 +128,13 @@ export default function TmdbSearchExperience() {
   const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [undoMessage, setUndoMessage] = useState<string | null>(null);
+  const [duplicateSaveOpen, setDuplicateSaveOpen] = useState(false);
+  const [duplicateSaveMessage, setDuplicateSaveMessage] = useState("");
+  const duplicateDialogRef = useRef<HTMLDivElement>(null);
   const deleteTimerRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
+
+  useModalFocusTrap(duplicateSaveOpen, duplicateDialogRef);
 
   const posterBase = "https://image.tmdb.org/t/p/w500";
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
@@ -109,6 +144,19 @@ export default function TmdbSearchExperience() {
     setToast(message);
     window.setTimeout(() => setToast(null), 2500);
   }
+
+  useEffect(() => {
+    if (!duplicateSaveOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDuplicateSaveOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [duplicateSaveOpen]);
 
   useEffect(() => {
     const onReset = () => {
@@ -315,9 +363,8 @@ export default function TmdbSearchExperience() {
                   const posterSrc = movie.poster_path
                     ? `${posterBase}${movie.poster_path}`
                     : null;
-                  const isSaved = library.watchlist.some(
-                    (m) => m.docId === movie.docId,
-                  );
+                  const placement = itemPlacementInLibrary(library, movie);
+                  const isSaved = placement !== null;
 
                   return (
                     <motion.div
@@ -356,6 +403,20 @@ export default function TmdbSearchExperience() {
                               disabled={!hydrated}
                               align="left"
                               onSelect={(cat) => {
+                                const placement = itemPlacementInLibrary(
+                                  library,
+                                  movie,
+                                );
+                                if (shouldBlockDuplicateSave(cat, placement)) {
+                                  setDuplicateSaveMessage(
+                                    messageForBlockedDuplicateSave(
+                                      cat,
+                                      placement,
+                                    ),
+                                  );
+                                  setDuplicateSaveOpen(true);
+                                  return;
+                                }
                                 setSavePromptCategory(cat);
                                 setSavePromptMovie(movie);
                                 setSavePromptOpen(true);
@@ -398,6 +459,8 @@ export default function TmdbSearchExperience() {
       <SaveMoviePromptModal
         open={savePromptOpen}
         category={savePromptCategory}
+        ratedByUserName={user?.name ?? null}
+        ratingBaseItem={savePromptMovie}
         onCancel={() => {
           setSavePromptOpen(false);
           setSavePromptCategory(null);
@@ -407,24 +470,42 @@ export default function TmdbSearchExperience() {
           if (!savePromptMovie || !savePromptCategory) return;
           if (!user) return;
 
-          const nextMovie: LibraryItem = {
-            ...savePromptMovie,
-            recommendedBy: user.name,
-            alexRating:
-              savePromptCategory === "watched" ? args.alexRating ?? null : null,
-            brittonRating:
-              savePromptCategory === "watched" ? args.brittonRating ?? null : null,
-            nabiRating:
-              savePromptCategory === "watched" ? args.nabiRating ?? null : null,
-            groupRatings:
-              savePromptCategory === "watched"
-                ? {
-                    alex: args.alexRating ?? null,
-                    britton: args.brittonRating ?? null,
-                    nabi: args.nabiRating ?? null,
-                  }
-                : undefined,
-          };
+          const placement = itemPlacementInLibrary(
+            library,
+            savePromptMovie,
+          );
+          if (shouldBlockDuplicateSave(savePromptCategory, placement)) {
+            setSavePromptOpen(false);
+            setSavePromptCategory(null);
+            setSavePromptMovie(null);
+            setDuplicateSaveMessage(
+              messageForBlockedDuplicateSave(
+                savePromptCategory,
+                placement,
+              ),
+            );
+            setDuplicateSaveOpen(true);
+            return;
+          }
+
+          const nextMovie: LibraryItem =
+            savePromptCategory === "watched"
+              ? setSeenTrueForPerson(
+                  {
+                    ...savePromptMovie,
+                    recommendedBy: user.name,
+                    ...mergeWatchedRatingPatch(savePromptMovie, args),
+                  },
+                  seenPersonForMovieNightUser(user.name),
+                )
+              : {
+                  ...savePromptMovie,
+                  recommendedBy: user.name,
+                  alexRating: null,
+                  brittonRating: null,
+                  nabiRating: null,
+                  groupRatings: undefined,
+                };
 
           saveMovie(nextMovie, savePromptCategory);
 
@@ -446,6 +527,48 @@ export default function TmdbSearchExperience() {
           clearAfterSave();
         }}
       />
+
+      {duplicateSaveOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="duplicate-save-title"
+          aria-describedby="duplicate-save-desc"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 z-0 bg-black/55 mn-modal-backdrop-animate"
+            onClick={() => setDuplicateSaveOpen(false)}
+            aria-label="Close"
+          />
+          <div
+            ref={duplicateDialogRef}
+            className="mn-modal-shell relative z-10 w-full max-w-[100vw] rounded-t-[var(--mn-radius-lg)] border border-mn-border bg-mn-modal p-6 text-mn-fg shadow-[var(--mn-shadow-soft)] sm:max-w-md sm:rounded-[var(--mn-radius-lg)]"
+          >
+            <div className="mx-auto -mt-1 mb-4 h-1 w-10 rounded-full bg-mn-border-strong sm:hidden" />
+            <h2
+              id="duplicate-save-title"
+              className="text-lg font-semibold tracking-tight"
+            >
+              Already in your library
+            </h2>
+            <p
+              id="duplicate-save-desc"
+              className="mt-3 text-sm leading-relaxed text-mn-fg-muted"
+            >
+              {duplicateSaveMessage}
+            </p>
+            <button
+              type="button"
+              onClick={() => setDuplicateSaveOpen(false)}
+              className="mn-btn-press mt-6 min-h-[44px] w-full rounded-xl bg-mn-accent px-4 py-3 text-sm font-semibold text-mn-bg transition hover:opacity-90"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {toast ? (
         <div className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900">

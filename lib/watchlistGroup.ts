@@ -1,6 +1,15 @@
+import type { MovieNightUserName } from "./auth";
 import { isWatchlistItemPassed, type LibraryItem } from "./movieLibrary";
 
 export type SeenPerson = "alex" | "britton" | "nabi";
+
+export function seenPersonForMovieNightUser(
+  name: MovieNightUserName,
+): SeenPerson {
+  if (name === "Alex") return "alex";
+  if (name === "Britton") return "britton";
+  return "nabi";
+}
 
 export const defaultSeenIt = (): NonNullable<LibraryItem["seenIt"]> => ({
   alex: false,
@@ -32,6 +41,26 @@ export function toggleSeenForPerson(
       [person]: !seenIt[person],
     },
   };
+}
+
+/** Sets one person’s “have watched” flag to true (idempotent). */
+export function setSeenTrueForPerson(
+  item: LibraryItem,
+  person: SeenPerson,
+): LibraryItem {
+  const seenIt = normalizeSeenIt(item);
+  return {
+    ...item,
+    seenIt: {
+      ...seenIt,
+      [person]: true,
+    },
+  };
+}
+
+export function everyoneHasSeenIt(item: LibraryItem): boolean {
+  const s = normalizeSeenIt(item);
+  return s.alex && s.britton && s.nabi;
 }
 
 export function togglePassed(

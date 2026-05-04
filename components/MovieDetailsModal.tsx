@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 import { tmdbGetMovieDetails, tmdbGetTvDetails } from "../src/lib/tmdbClient";
 
 type MediaDetails = {
@@ -38,9 +39,12 @@ export default function MovieDetailsModal({
   tmdbId: number | null;
   onClose: () => void;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const [media, setMedia] = useState<MediaDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useModalFocusTrap(open, panelRef);
 
   useEffect(() => {
     if (!open || !tmdbId || !mediaType) return;
@@ -108,88 +112,101 @@ export default function MovieDetailsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="movie-details-title"
     >
-      <button
-        className="absolute inset-0 bg-black/50"
+      <div
+        className="absolute inset-0 z-0 bg-black/55 mn-modal-backdrop-animate"
+        role="presentation"
         onClick={onClose}
-        aria-label="Close modal"
+        onKeyDown={() => {}}
       />
 
-      <div className="relative w-full max-w-[95vw] overflow-y-auto rounded-2xl bg-white text-zinc-900 shadow-xl dark:bg-black dark:text-zinc-50 max-h-[95vh] sm:max-w-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-200 p-4 dark:border-zinc-800">
-          <div>
-            <h2 className="text-lg font-semibold leading-6">
+      <div
+        ref={panelRef}
+        className="mn-modal-shell relative z-10 flex max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-bottom)-1rem))] w-full max-w-[100vw] flex-col overflow-hidden rounded-t-[var(--mn-radius-lg)] border border-mn-border bg-mn-modal text-mn-fg shadow-[var(--mn-shadow-soft)] sm:max-h-[95vh] sm:max-w-2xl sm:rounded-[var(--mn-radius-lg)]"
+      >
+        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-mn-border-strong sm:hidden" />
+
+        <div className="flex items-start justify-between gap-4 border-b border-mn-border p-4">
+          <div className="min-w-0">
+            <h2
+              id="movie-details-title"
+              className="text-lg font-semibold leading-6 text-mn-fg"
+            >
               {media?.title || heading}
               {year ? (
-                <span className="ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400">
+                <span className="ml-2 text-sm font-normal text-mn-fg-muted">
                   ({year})
                 </span>
               ) : null}
             </h2>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-mn-fg-muted">
               {loading ? "Fetching…" : error ? error : "Plot summary"}
             </p>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="min-h-[44px] rounded-md border border-zinc-200 px-4 py-3 text-sm hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
+            className="mn-btn-press min-h-[44px] shrink-0 rounded-xl border border-mn-border bg-mn-input px-4 py-3 text-sm text-mn-fg hover:bg-mn-card-elev"
             aria-label="Close"
           >
             Close
           </button>
         </div>
 
-        <div className="grid gap-4 p-4 md:grid-cols-[180px_1fr]">
-          <div className="aspect-[2/3] w-full overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
-            {posterSrc ? (
-              <img
-                src={posterSrc}
-                alt={media?.title ? `${media.title} poster` : "Poster"}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">
-                No poster
-              </div>
-            )}
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+            <div className="aspect-[2/3] w-full max-w-[200px] overflow-hidden rounded-lg border border-mn-border bg-mn-card md:max-w-none">
+              {posterSrc ? (
+                <img
+                  src={posterSrc}
+                  alt={media?.title ? `${media.title} poster` : "Poster"}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center p-3 text-sm text-mn-fg-muted">
+                  No poster
+                </div>
+              )}
+            </div>
 
-          <div>
-            {!tmdbId || !mediaType ? (
-              <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                No database details for this item.
-              </p>
-            ) : null}
+            <div>
+              {!tmdbId || !mediaType ? (
+                <p className="text-sm text-mn-fg-muted">
+                  No database details for this item.
+                </p>
+              ) : null}
 
-            {error ? (
-              <div
-                className={`rounded-lg border p-3 text-sm ${
-                  missingKey
-                    ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200"
-                    : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200"
-                }`}
-              >
-                {error}
-              </div>
-            ) : null}
+              {error ? (
+                <div
+                  className={`rounded-lg border p-3 text-sm ${
+                    missingKey
+                      ? "border-mn-warning/40 bg-mn-warning/10 text-mn-warning"
+                      : "border-mn-danger/40 bg-mn-danger/10 text-mn-danger"
+                  }`}
+                >
+                  {error}
+                </div>
+              ) : null}
 
-            {loading ? (
-              <div className="text-sm text-zinc-600 dark:text-zinc-300">
-                Fetching plot summary…
-              </div>
-            ) : media?.overview ? (
-              <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-200">
-                {media.overview}
-              </p>
-            ) : tmdbId && mediaType ? (
-              <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                No plot summary available.
-              </p>
-            ) : null}
+              {loading ? (
+                <div className="text-sm text-mn-fg-muted">
+                  Fetching plot summary…
+                </div>
+              ) : media?.overview ? (
+                <p className="whitespace-pre-wrap text-sm leading-6 text-mn-fg">
+                  {media.overview}
+                </p>
+              ) : tmdbId && mediaType ? (
+                <p className="text-sm leading-6 text-mn-fg-muted">
+                  No plot summary available.
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { MovieNightUser } from "../lib/auth";
 import AddMiscModal from "./AddMiscModal";
+import ThemeSwitcher from "./ThemeSwitcher";
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -89,17 +90,19 @@ export default function TopNav({
   }
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-black/60">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 sm:px-6 lg:px-8">
+    <nav className="sticky top-0 z-50 border-b border-mn-border bg-mn-nav/95 backdrop-blur-md supports-[backdrop-filter]:bg-mn-nav/80">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6 lg:px-8">
         <Link
           href="/"
           onClick={() => resetAllSearchState()}
-          className="min-h-[44px] min-w-0 shrink-0 py-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50"
+          className="min-h-[44px] min-w-0 shrink-0 py-2 text-sm font-bold tracking-tight text-mn-fg"
+          style={{
+            fontFamily: "var(--font-orbitron), system-ui, sans-serif",
+          }}
         >
-          Movie Night
+          <span className="text-mn-accent">Movie</span> Night
         </Link>
 
-        {/* Desktop / large tablet: full nav row with wrap (no overlap with aggressive single line) */}
         <div className="hidden min-w-0 flex-1 flex-wrap items-center justify-end gap-x-2 gap-y-2 lg:flex [&_a]:whitespace-nowrap">
           {LINKS.map((l) => {
             const active = isActive(pathname, l.href);
@@ -111,15 +114,15 @@ export default function TopNav({
                 onClick={() => {
                   if (isHome) resetAllSearchState();
                 }}
-                className={`inline-flex min-h-[40px] items-center rounded-lg px-2 py-2 text-sm font-medium transition ${
+                className={`inline-flex min-h-[40px] items-center rounded-lg px-2 py-2 text-sm font-medium transition touch-manipulation ${
                   active
-                    ? "text-zinc-900 dark:text-white"
-                    : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+                    ? "font-semibold text-mn-accent"
+                    : "text-mn-fg-muted hover:text-mn-fg"
                 }`}
                 style={
                   active
                     ? {
-                        boxShadow: "inset 0 -2px 0 0 rgba(24,24,27,1)",
+                        boxShadow: "inset 0 -2px 0 0 var(--mn-accent)",
                       }
                     : undefined
                 }
@@ -133,33 +136,35 @@ export default function TopNav({
             <button
               type="button"
               onClick={openAddMisc}
-              className="min-h-[40px] shrink-0 rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-900 transition hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-950/60 dark:text-violet-100 dark:hover:bg-violet-900/50"
+              className="mn-btn-press min-h-[40px] shrink-0 rounded-xl border border-mn-border-strong bg-mn-input px-3 py-2 text-sm font-semibold text-mn-accent transition hover:bg-mn-card-elev"
             >
               + Add Misc
             </button>
           ) : null}
         </div>
 
-        {/* Right cluster: greeting, logout, menu — below lg use hamburger only for links */}
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           {user ? (
             <>
-              <div className="hidden max-w-[140px] truncate text-sm font-medium text-zinc-900 dark:text-zinc-50 sm:block lg:max-w-none">
+              <div className="hidden max-w-[140px] truncate text-sm font-medium text-mn-fg sm:block lg:max-w-none">
                 Hi, {displayName}!
               </div>
+              <ThemeSwitcher />
               <button
                 type="button"
                 onClick={() => onLogout?.()}
-                className="hidden min-h-[44px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 lg:inline-flex dark:border-zinc-800 dark:bg-zinc-900/20 dark:text-zinc-50 dark:hover:bg-zinc-900/35"
+                className="mn-btn-press hidden min-h-[44px] rounded-xl border border-mn-border bg-mn-card px-3 py-2 text-sm font-medium text-mn-fg shadow-sm transition hover:bg-mn-card-elev lg:inline-flex"
               >
                 Logout
               </button>
             </>
-          ) : null}
+          ) : (
+            <ThemeSwitcher />
+          )}
 
           <button
             type="button"
-            className="inline-flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm transition hover:bg-zinc-50 lg:hidden dark:border-zinc-800 dark:bg-zinc-900/20 dark:text-zinc-50 dark:hover:bg-zinc-900/35"
+            className="mn-btn-press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-mn-border bg-mn-card text-mn-fg shadow-sm transition hover:bg-mn-card-elev lg:hidden"
             onClick={() => setOpen((v) => !v)}
             aria-label="Toggle navigation"
             aria-expanded={open}
@@ -196,55 +201,63 @@ export default function TopNav({
       </div>
 
       {open ? (
-        <div className="border-t border-zinc-200 bg-white/95 dark:border-zinc-800 dark:bg-zinc-950/98 lg:hidden">
-          <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6 lg:px-8">
-            <div className="flex max-h-[min(70vh,480px)] flex-col gap-1 overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95">
-              {LINKS.map((l) => {
-                const active = isActive(pathname, l.href);
-                const isHome = l.href === "/";
-                return (
-                  <Link
-                    key={l.href}
-                    href={l.href}
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-[48] bg-black/50 mn-nav-backdrop-enter lg:hidden"
+            aria-label="Close menu"
+            onClick={() => setOpen(false)}
+          />
+          <div className="relative z-[49] border-t border-mn-border bg-mn-modal/98 backdrop-blur-md lg:hidden">
+            <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6 lg:px-8">
+              <div className="mn-nav-drawer-enter flex max-h-[min(70vh,480px)] flex-col gap-1 overflow-y-auto rounded-2xl border border-mn-border bg-mn-card p-2 shadow-[var(--mn-shadow-soft)]">
+                {LINKS.map((l) => {
+                  const active = isActive(pathname, l.href);
+                  const isHome = l.href === "/";
+                  return (
+                    <Link
+                      key={l.href}
+                      href={l.href}
+                      onClick={() => {
+                        setOpen(false);
+                        if (isHome) resetAllSearchState();
+                      }}
+                      className={`min-h-[48px] rounded-xl px-4 py-3 text-sm font-medium transition touch-manipulation ${
+                        active
+                          ? "bg-mn-accent/20 font-semibold text-mn-accent ring-1 ring-mn-border-strong"
+                          : "bg-mn-input text-mn-fg hover:bg-mn-card-elev"
+                      }`}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      {l.label}
+                    </Link>
+                  );
+                })}
+                {user ? (
+                  <button
+                    type="button"
+                    onClick={openAddMisc}
+                    className="min-h-[48px] rounded-xl border border-mn-border-strong bg-mn-input px-4 py-3 text-left text-sm font-semibold text-mn-accent touch-manipulation"
+                  >
+                    + Add Misc
+                  </button>
+                ) : null}
+                {user ? (
+                  <button
+                    type="button"
                     onClick={() => {
                       setOpen(false);
-                      if (isHome) resetAllSearchState();
+                      onLogout?.();
                     }}
-                    className={`min-h-[48px] rounded-xl px-4 py-3 text-sm font-medium transition ${
-                      active
-                        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-black"
-                        : "bg-zinc-50 text-zinc-900 hover:bg-zinc-100 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                    }`}
-                    aria-current={active ? "page" : undefined}
+                    className="min-h-[48px] rounded-xl border border-mn-border bg-mn-card px-4 py-3 text-left text-sm font-medium text-mn-fg transition hover:bg-mn-card-elev touch-manipulation"
                   >
-                    {l.label}
-                  </Link>
-                );
-              })}
-              {user ? (
-                <button
-                  type="button"
-                  onClick={openAddMisc}
-                  className="min-h-[48px] rounded-xl border border-violet-300 bg-violet-50 px-4 py-3 text-left text-sm font-semibold text-violet-900 dark:border-violet-700 dark:bg-violet-950/60 dark:text-violet-100"
-                >
-                  + Add Misc
-                </button>
-              ) : null}
-              {user ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onLogout?.();
-                  }}
-                  className="min-h-[48px] rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/20 dark:text-zinc-50 dark:hover:bg-zinc-900/35"
-                >
-                  Logout
-                </button>
-              ) : null}
+                    Logout
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       ) : null}
 
       {user && addMiscOpen ? (

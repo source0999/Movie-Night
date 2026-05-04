@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  dedupeLibraryItemsByIdentity,
   moveMovieInLibrary,
   removeMovieFromLibrary,
   emptyLibrary,
@@ -88,6 +89,14 @@ function itemToFirestoreData(item: LibraryItem, category: LibraryCategory) {
     };
     base.passed = isWatchlistItemPassed(item);
     base.passedBy = item.passedBy?.trim() || null;
+    base.alexRating = item.alexRating ?? null;
+    base.brittonRating = item.brittonRating ?? null;
+    base.nabiRating = item.nabiRating ?? null;
+    base.groupRatings = {
+      alex: item.groupRatings?.alex ?? item.alexRating ?? null,
+      britton: item.groupRatings?.britton ?? item.brittonRating ?? null,
+      nabi: item.groupRatings?.nabi ?? item.nabiRating ?? null,
+    };
     return base;
   }
 
@@ -181,11 +190,13 @@ export function useMovieLibrary() {
           watchlistQ,
           (snap) => {
             if (cancelled) return;
-            watchlist = snap.docs
-              .map((docSnap) =>
-                normalizeItem(docSnap.id, docSnap.data()),
-              )
-              .filter((m): m is LibraryItem => !!m);
+            watchlist = dedupeLibraryItemsByIdentity(
+              snap.docs
+                .map((docSnap) =>
+                  normalizeItem(docSnap.id, docSnap.data()),
+                )
+                .filter((m): m is LibraryItem => !!m),
+            );
             watchlistLoaded = true;
             maybeHydrate();
           },
@@ -202,11 +213,13 @@ export function useMovieLibrary() {
           watchedQ,
           (snap) => {
             if (cancelled) return;
-            watched = snap.docs
-              .map((docSnap) =>
-                normalizeItem(docSnap.id, docSnap.data()),
-              )
-              .filter((m): m is LibraryItem => !!m);
+            watched = dedupeLibraryItemsByIdentity(
+              snap.docs
+                .map((docSnap) =>
+                  normalizeItem(docSnap.id, docSnap.data()),
+                )
+                .filter((m): m is LibraryItem => !!m),
+            );
             watchedLoaded = true;
             maybeHydrate();
           },
@@ -407,7 +420,7 @@ export function useMovieLibrary() {
       }
     }
     if (timedOutAny) {
-      setGenreWorkerTick((x) => x + 1);
+      queueMicrotask(() => setGenreWorkerTick((x) => x + 1));
     }
 
     const next = combined.find((i) => {

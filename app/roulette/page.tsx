@@ -16,6 +16,7 @@ import { normalizeSeenIt } from "../../lib/watchlistGroup";
 import { tmdbGenreLabel } from "../../src/lib/tmdbGenres";
 import SpinningWheel from "../../components/SpinningWheel";
 import ConfettiBurst from "../../components/ConfettiBurst";
+import EmptyCard from "../../components/EmptyCard";
 
 type RecommenderFilter = "everyone" | "Alex" | "Britton" | "Nabi";
 
@@ -65,6 +66,9 @@ function buildPoolBeforeGenre(
   return pool;
 }
 
+const chipBase =
+  "shrink-0 snap-start rounded-xl border px-3 py-2.5 text-sm font-semibold transition touch-manipulation";
+
 export default function RoulettePage() {
   const searchParams = useSearchParams();
   const { hydrated, library } = useMovieLibrary();
@@ -88,7 +92,7 @@ export default function RoulettePage() {
   useEffect(() => {
     const raw = searchParams.get("media")?.toLowerCase();
     if (raw === "movie" || raw === "tv" || raw === "misc") {
-      setSpinKind(raw);
+      queueMicrotask(() => setSpinKind(raw));
     }
   }, [searchParams]);
 
@@ -128,7 +132,7 @@ export default function RoulettePage() {
     if (genreChoice === "all") return;
     const n = Number.parseInt(genreChoice, 10);
     if (!Number.isFinite(n) || !genreOptions.includes(n)) {
-      setGenreChoice("all");
+      queueMicrotask(() => setGenreChoice("all"));
     }
   }, [genreChoice, genreOptions]);
 
@@ -195,25 +199,43 @@ export default function RoulettePage() {
 
   const spinAreaKey = `${spinKind}-${recommenderFilter}-${pureUnseenOnly}-${genreChoice}`;
 
+  const genreHint = !genreApplies ? (
+    <p className="text-center text-xs text-mn-fg-muted">
+      Genres apply to Movies and TV (movie database). Misc uses every eligible
+      link.
+    </p>
+  ) : genreOptions.length === 0 &&
+    basePool.some((m) => (m.genreIds?.length ?? 0) > 0) ? (
+    <p className="text-center text-xs text-mn-fg-muted">
+      Genres need at least two titles with your current filters to appear here.
+      Use All genres or relax filters.
+    </p>
+  ) : genreOptions.length === 0 ? (
+    <p className="text-center text-xs text-mn-fg-muted">
+      No genre data yet. Save titles from search so movie database genres are
+      stored, or pick All genres.
+    </p>
+  ) : null;
+
   return (
-    <div className="min-h-screen bg-zinc-50 py-8 text-zinc-900 dark:bg-black dark:text-zinc-50 sm:py-12">
+    <div className="min-h-screen py-8 text-mn-fg sm:py-12 pb-[max(env(safe-area-inset-bottom),24px)]">
       <div className="mx-auto flex max-w-xl flex-col items-center px-4 sm:px-6">
         <header className="mb-8 w-full text-center">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          <h1 className="text-[clamp(1.6rem,5vw,2.2rem)] font-bold tracking-tight sm:text-4xl">
             Roulette
           </h1>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-sm leading-relaxed text-mn-fg-muted">
             {instruction}
           </p>
         </header>
 
         {hydrated && watchlistAll.length > 0 ? (
           <section
-            className="mb-10 w-full space-y-5 rounded-2xl border border-zinc-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/50 sm:p-6"
+            className="mb-10 w-full space-y-5 rounded-2xl border border-mn-border bg-mn-card/95 p-5 shadow-[var(--mn-shadow-soft)] sm:p-6"
             aria-label="Roulette options"
           >
             <div>
-              <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-mn-fg-muted">
                 Library
               </p>
               <div
@@ -228,10 +250,10 @@ export default function RoulettePage() {
                       key={opt.value}
                       type="button"
                       onClick={() => setSpinKind(opt.value)}
-                      className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                      className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition touch-manipulation ${
                         active
-                          ? "bg-violet-600 text-white shadow-md shadow-violet-600/30 dark:bg-violet-500"
-                          : "border border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                          ? "bg-mn-accent text-mn-bg shadow-[var(--mn-shadow-glow)]"
+                          : "border border-mn-border bg-mn-input text-mn-fg hover:bg-mn-card-elev"
                       }`}
                       aria-pressed={active}
                     >
@@ -243,18 +265,60 @@ export default function RoulettePage() {
             </div>
 
             <div className="space-y-2">
-              <label
-                htmlFor="roulette-genre"
-                className="block text-center text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+              <p
+                id="roulette-genre-label"
+                className="block text-center text-[11px] font-bold uppercase tracking-[0.18em] text-mn-fg-muted"
               >
                 Genre
-              </label>
+              </p>
+
+              <div
+                className="sm:hidden flex gap-2 overflow-x-auto pb-1 scrollbar-hide snap-x snap-mandatory touch-pan-x"
+                role="listbox"
+                aria-labelledby="roulette-genre-label"
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={genreChoice === "all"}
+                  disabled={!genreApplies}
+                  onClick={() => setGenreChoice("all")}
+                  className={`${chipBase} ${
+                    genreChoice === "all"
+                      ? "border-mn-accent-strong bg-mn-accent/15 text-mn-accent"
+                      : "border-mn-border bg-mn-input text-mn-fg"
+                  } disabled:opacity-50`}
+                >
+                  All genres
+                </button>
+                {genreOptions.map((id) => {
+                  const sel = genreChoice === String(id);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="option"
+                      aria-selected={sel}
+                      onClick={() => setGenreChoice(String(id))}
+                      className={`${chipBase} ${
+                        sel
+                          ? "border-mn-accent-strong bg-mn-accent/15 text-mn-accent"
+                          : "border-mn-border bg-mn-input text-mn-fg"
+                      }`}
+                    >
+                      {tmdbGenreLabel(id)}
+                    </button>
+                  );
+                })}
+              </div>
+
               <select
                 id="roulette-genre"
                 value={genreApplies ? genreChoice : "all"}
                 disabled={!genreApplies}
                 onChange={(e) => setGenreChoice(e.target.value)}
-                className="mx-auto block w-full max-w-md rounded-xl border border-zinc-200 bg-white px-3 py-3 text-center text-sm font-medium text-zinc-900 shadow-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-violet-400 dark:focus:ring-violet-400/20 sm:text-left"
+                aria-labelledby="roulette-genre-label"
+                className="mx-auto hidden w-full max-w-md rounded-xl border border-mn-border bg-mn-input px-3 py-3 text-center text-sm font-medium text-mn-fg shadow-sm outline-none focus:border-mn-border-strong focus:ring-2 focus:ring-mn-focus/25 disabled:cursor-not-allowed disabled:opacity-60 sm:block sm:text-left"
               >
                 <option value="all">All genres</option>
                 {genreOptions.map((id) => (
@@ -263,39 +327,51 @@ export default function RoulettePage() {
                   </option>
                 ))}
               </select>
-              {!genreApplies ? (
-                <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
-                  Genres apply to Movies and TV (movie database). Misc uses every
-                  eligible link.
-                </p>
-              ) : genreOptions.length === 0 &&
-                basePool.some((m) => (m.genreIds?.length ?? 0) > 0) ? (
-                <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
-                  Genres need at least two titles with your current filters to
-                  appear here. Use All genres or relax filters.
-                </p>
-              ) : genreOptions.length === 0 ? (
-                <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
-                  No genre data yet. Save titles from search so movie database
-                  genres are stored, or pick All genres.
-                </p>
-              ) : null}
+              {genreHint}
             </div>
 
             <div className="space-y-2">
-              <label
-                htmlFor="roulette-recommender"
-                className="block text-center text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+              <p
+                id="roulette-recommender-label"
+                className="block text-center text-[11px] font-bold uppercase tracking-[0.18em] text-mn-fg-muted"
               >
                 Recommended by
-              </label>
+              </p>
+
+              <div
+                className="sm:hidden flex gap-2 overflow-x-auto pb-1 scrollbar-hide snap-x snap-mandatory touch-pan-x"
+                role="listbox"
+                aria-labelledby="roulette-recommender-label"
+              >
+                {RECOMMENDER_OPTIONS.map((o) => {
+                  const sel = recommenderFilter === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      role="option"
+                      aria-selected={sel}
+                      onClick={() => setRecommenderFilter(o.value)}
+                      className={`${chipBase} ${
+                        sel
+                          ? "border-mn-accent-strong bg-mn-accent/15 text-mn-accent"
+                          : "border-mn-border bg-mn-input text-mn-fg"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               <select
                 id="roulette-recommender"
                 value={recommenderFilter}
                 onChange={(e) =>
                   setRecommenderFilter(e.target.value as RecommenderFilter)
                 }
-                className="mx-auto block w-full max-w-md rounded-xl border border-zinc-200 bg-white px-3 py-3 text-center text-sm font-medium text-zinc-900 shadow-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-violet-400 dark:focus:ring-violet-400/20 sm:text-left"
+                aria-labelledby="roulette-recommender-label"
+                className="mx-auto hidden w-full max-w-md rounded-xl border border-mn-border bg-mn-input px-3 py-3 text-center text-sm font-medium text-mn-fg shadow-sm outline-none focus:border-mn-border-strong focus:ring-2 focus:ring-mn-focus/25 sm:block sm:text-left"
               >
                 {RECOMMENDER_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -306,18 +382,19 @@ export default function RoulettePage() {
             </div>
 
             {spinKind !== "misc" ? (
-              <label className="flex cursor-pointer items-start justify-center gap-3 rounded-xl border border-zinc-200/80 bg-zinc-50/90 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900/40 sm:justify-start">
+              <label className="flex cursor-pointer items-start justify-center gap-3 rounded-xl border border-mn-border bg-mn-input/80 px-3 py-3 sm:justify-start">
                 <input
                   type="checkbox"
                   checked={pureUnseenOnly}
                   onChange={(e) => setPureUnseenOnly(e.target.checked)}
-                  className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 text-violet-600 focus:ring-violet-500 dark:border-zinc-600"
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-mn-border focus:ring-mn-focus/30"
+                  style={{ accentColor: "var(--mn-accent)" }}
                 />
                 <span className="text-left">
-                  <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                  <span className="block text-sm font-semibold text-mn-fg">
                     Pure unseen only
                   </span>
-                  <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-400">
+                  <span className="mt-0.5 block text-xs text-mn-fg-muted">
                     Alex, Britton, and Nabi have not marked “Seen it” yet.
                   </span>
                 </span>
@@ -327,32 +404,33 @@ export default function RoulettePage() {
         ) : null}
 
         {winner ? null : showEmptyState ? (
-          <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
-            <p className="text-base font-medium text-zinc-900 dark:text-zinc-50">
-              {watchlistAll.length === 0
+          <EmptyCard
+            title={
+              watchlistAll.length === 0
                 ? "Your Watchlist is empty."
                 : allWatchlistPassed
                   ? "Everything on your Watchlist is marked Pass."
                   : eligible.length === 0
                     ? "Nothing matches these filters."
-                    : "Not enough titles to spin."}
-            </p>
-            <p className="mt-2">
-              {watchlistAll.length === 0
+                    : "Not enough titles to spin."
+            }
+            description={
+              watchlistAll.length === 0
                 ? "Add movies, TV, or misc links first."
                 : allWatchlistPassed
                   ? "Un-pass titles in the Library. Passed items never qualify to spin."
                   : eligible.length === 0
                     ? "Try All genres, a different tab, or Everyone."
-                    : "Add more titles or relax filters so at least two qualify."}
-            </p>
+                    : "Add more titles or relax filters so at least two qualify."
+            }
+          >
             <Link
               href="/library"
-              className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-mn-accent px-5 py-3 text-sm font-semibold text-mn-bg transition hover:opacity-90"
             >
               Open Library
             </Link>
-          </div>
+          </EmptyCard>
         ) : (
           <div className="flex w-full flex-col items-center">
             <SpinningWheel
@@ -368,9 +446,12 @@ export default function RoulettePage() {
       </div>
 
       {winner ? (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 p-4 text-center text-white sm:p-6">
-          <div className="absolute inset-0 opacity-30">
-            <div className="h-full w-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.25),transparent_45%)]" />
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-mn-bg p-4 text-center text-mn-fg sm:p-6">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-90"
+            aria-hidden
+          >
+            <div className="h-full w-full bg-[radial-gradient(circle_at_30%_20%,color-mix(in_srgb,var(--mn-accent)_40%,transparent),transparent_60%)]" />
           </div>
 
           <div
@@ -385,31 +466,43 @@ export default function RoulettePage() {
             durationMs={4200}
           />
 
-          <div className="relative z-[110] w-full max-w-lg px-2">
-            <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
+          <div className="relative z-[110] flex w-full max-w-lg flex-col items-center px-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <h2 className="text-4xl font-black tracking-tight text-mn-fg sm:text-5xl">
               Winner!
             </h2>
 
-            <div className="mt-8 rounded-2xl border border-white/10 bg-white/10 p-6 shadow-2xl backdrop-blur-md dark:bg-black/30">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-200/90">
+            <div className="mt-8 w-full rounded-2xl border border-mn-border-strong bg-mn-modal/90 p-6 text-left shadow-[var(--mn-shadow-soft)] backdrop-blur-md sm:text-center">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-mn-accent">
                 Tonight&apos;s pick
               </p>
-              <p className="mt-3 text-2xl font-bold leading-snug text-white sm:text-3xl">
+              <p className="mt-3 text-2xl font-bold leading-snug text-mn-fg sm:text-3xl">
                 {winner.title}
               </p>
-              <p className="mt-5 text-lg font-medium leading-relaxed text-white/95 sm:text-xl">
+              <p className="mt-5 text-lg font-medium leading-relaxed text-mn-fg-muted sm:text-xl">
                 Recommended by {recommenderDisplay}
-                <span className="text-cyan-200"> — Let&apos;s watch!</span>
+                <span className="text-mn-accent"> — Let&apos;s watch!</span>
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setWinner(null)}
-              className="mt-10 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-zinc-900 shadow-lg transition hover:bg-zinc-100"
-            >
-              Spin again
-            </button>
+            <div className="mt-10 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:justify-center">
+              <Link
+                href="/"
+                className="mn-btn-press inline-flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-mn-accent px-6 py-3 text-center text-sm font-semibold text-mn-bg shadow-[var(--mn-shadow-soft)] transition hover:opacity-95"
+              >
+                Add to tonight
+              </Link>
+              <button
+                type="button"
+                onClick={() => setWinner(null)}
+                className="mn-btn-press inline-flex min-h-[48px] flex-1 items-center justify-center rounded-xl border border-mn-border bg-mn-input px-6 py-3 text-sm font-semibold text-mn-fg transition hover:bg-mn-card-elev"
+              >
+                Spin again
+              </button>
+            </div>
+            <p className="mt-4 max-w-md text-center text-xs text-mn-fg-muted">
+              Pick another from your library anytime — filters stay as you left
+              them.
+            </p>
           </div>
         </div>
       ) : null}

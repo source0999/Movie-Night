@@ -67,6 +67,7 @@ export function PassedRibbon({ item }: { item: LibraryItem }) {
   );
 }
 
+/** Alex → primary accent, Britton → accent-2, Nabi → success (readable on dark base). */
 function seenButtonClass(
   active: boolean,
   color: "violet" | "cyan" | "green",
@@ -76,28 +77,26 @@ function seenButtonClass(
   const size = compact
     ? "h-8 w-8 border-[2px] text-[11px]"
     : "h-10 w-10 border-[2.5px] text-sm";
-  const base = `flex ${size} shrink-0 items-center justify-center rounded-full font-bold transition select-none focus:outline-none focus-visible:ring-[3px] focus-visible:ring-zinc-400/80 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950`;
+  const base = `flex ${size} shrink-0 items-center justify-center rounded-full font-bold transition select-none focus:outline-none focus-visible:ring-[3px] focus-visible:ring-mn-focus/80 focus-visible:ring-offset-2 focus-visible:ring-offset-mn-bg`;
   const cursor = canToggle ? "cursor-pointer" : "cursor-not-allowed";
 
   if (!active) {
     const dim =
-      "border-zinc-300 bg-zinc-100 text-zinc-500 shadow-inner dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-400";
-    const hover =
-      canToggle
-        ? " hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-        : "";
+      "border-mn-border bg-mn-input text-mn-fg-muted shadow-inner";
+    const hover = canToggle
+      ? " hover:border-mn-border-strong hover:bg-mn-card-elev hover:text-mn-fg"
+      : "";
     return `${base} ${dim} ${hover} ${cursor}`;
   }
 
   const glow =
     color === "violet"
-      ? "border-violet-500 bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,0.65)] ring-2 ring-violet-400/50 dark:border-violet-400 dark:bg-violet-500"
+      ? "border-mn-accent bg-mn-accent text-mn-bg shadow-[var(--mn-shadow-glow)] ring-2 ring-mn-accent/45"
       : color === "cyan"
-        ? "border-cyan-500 bg-cyan-600 text-white shadow-[0_0_16px_rgba(6,182,212,0.6)] ring-2 ring-cyan-400/50 dark:border-cyan-400 dark:bg-cyan-500"
-        : "border-emerald-500 bg-emerald-600 text-white shadow-[0_0_16px_rgba(16,185,129,0.6)] ring-2 ring-emerald-400/45 dark:border-emerald-400 dark:bg-emerald-500";
+        ? "border-mn-accent-2 bg-mn-accent-2 text-mn-bg shadow-[0_0_16px_color-mix(in_srgb,var(--mn-accent-2)_60%,transparent)] ring-2 ring-mn-accent-2/45"
+        : "border-mn-success bg-mn-success text-mn-bg shadow-[0_0_16px_color-mix(in_srgb,var(--mn-success)_55%,transparent)] ring-2 ring-mn-success/40";
 
-  const activeHover =
-    canToggle ? " hover:brightness-110 active:brightness-95" : "";
+  const activeHover = canToggle ? " hover:brightness-110 active:brightness-95" : "";
   return `${base} ${glow} ${cursor} ${activeHover}`;
 }
 
@@ -198,25 +197,25 @@ export function WatchlistGroupControls({
   return (
     <div className={compact ? "flex flex-col gap-2" : "flex flex-col gap-3"}>
       <div
-        className={`flex flex-wrap items-center rounded-xl border border-zinc-200/60 bg-zinc-50/80 dark:border-zinc-700/60 dark:bg-zinc-900/40 ${rowGap}`}
+        className={`flex flex-wrap items-center rounded-xl border border-mn-border bg-mn-input/80 ${rowGap}`}
         title="Seen it"
       >
         <span
-          className={`ml-0.5 shrink-0 text-zinc-500 dark:text-zinc-400 ${compact ? "sm:ml-1" : ""}`}
+          className={`ml-0.5 shrink-0 text-mn-fg-muted ${compact ? "sm:ml-1" : ""}`}
         >
           <span className="sr-only sm:not-sr-only">
             <span
               className={
                 compact
                   ? "text-[9px] font-bold uppercase tracking-wider"
-                  : "text-[10px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-300"
+                  : "text-[10px] font-bold uppercase tracking-wider text-mn-fg-muted"
               }
             >
               Seen it
             </span>
           </span>
           <span className="inline sm:hidden" aria-hidden>
-            <SeenItEyeIcon className="text-zinc-500 dark:text-zinc-400" />
+            <SeenItEyeIcon className="text-mn-fg-muted" />
           </span>
         </span>
         <SeenToggle
@@ -254,14 +253,14 @@ export function WatchlistGroupControls({
             type="button"
             disabled={disabled || (!passed && !user?.name)}
             aria-pressed={passed}
-            className={`w-full max-w-[240px] rounded-xl border-2 font-bold shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950 ${
+            className={`w-full max-w-[240px] rounded-xl border-2 font-bold shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-mn-focus focus-visible:ring-offset-2 focus-visible:ring-offset-mn-bg ${
               compact
                 ? "min-h-[40px] px-3 py-2 text-xs"
                 : "min-h-[44px] px-5 py-2.5 text-sm"
             } ${
               passed
-                ? "border-rose-400 bg-gradient-to-b from-rose-100 to-rose-50 text-rose-950 shadow-rose-500/20 dark:border-rose-600 dark:from-rose-950/80 dark:to-rose-900/50 dark:text-rose-100"
-                : "border-violet-400/80 bg-gradient-to-b from-violet-600 to-violet-700 text-white shadow-violet-900/25 hover:from-violet-500 hover:to-violet-600 disabled:opacity-50 dark:border-violet-500 dark:from-violet-600 dark:to-violet-800"
+                ? "border-mn-danger/70 bg-gradient-to-b from-mn-danger/25 to-mn-danger/10 text-mn-danger shadow-mn-danger/20"
+                : "border-mn-accent/80 bg-gradient-to-b from-mn-accent to-mn-accent-2 text-mn-bg shadow-[var(--mn-shadow-glow)] hover:opacity-95 disabled:opacity-50"
             }`}
             onClick={() =>
               onPatch(togglePassed(item, user?.name ?? null))

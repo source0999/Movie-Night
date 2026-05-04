@@ -11,16 +11,31 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   if (!hydrated) {
     return (
       <div
-        className="flex min-h-screen flex-col items-center justify-center gap-3 bg-zinc-50 px-4 text-center dark:bg-black"
+        className="flex min-h-screen flex-col items-center justify-center gap-5 bg-mn-bg px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] text-center"
         aria-busy="true"
         aria-live="polite"
       >
-        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-          Syncing…
-        </p>
-        <p className="max-w-sm text-xs text-zinc-500 dark:text-zinc-500">
-          If this stays for more than a few seconds, refresh the page or check your connection.
-        </p>
+        <div
+          className="mn-loading-ring relative h-14 w-14 rounded-full border-2 border-mn-border border-t-mn-accent"
+          aria-hidden
+        />
+        <div>
+          <p
+            className="text-sm font-semibold tracking-wide text-mn-fg"
+            style={{
+              fontFamily: "var(--font-orbitron), system-ui, sans-serif",
+            }}
+          >
+            Movie Night
+          </p>
+          <p className="mt-2 text-sm font-medium text-mn-fg-muted">
+            Syncing…
+          </p>
+          <p className="mt-1 max-w-sm text-xs text-mn-fg-soft">
+            If this stays for more than a few seconds, refresh the page or check
+            your connection.
+          </p>
+        </div>
       </div>
     );
   }
@@ -36,4 +51,3 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     </>
   );
 }
-

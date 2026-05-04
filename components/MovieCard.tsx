@@ -39,7 +39,7 @@ export default function MovieCard({
           type="button"
           onClick={onDelete}
           aria-label="Delete movie"
-          className="absolute right-3 top-3 z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-white/90 p-3 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white dark:bg-black/60 dark:text-zinc-200 dark:ring-zinc-800"
+          className="absolute right-3 top-3 z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-mn-modal/95 p-3 text-mn-fg shadow-sm ring-1 ring-mn-border hover:bg-mn-card-elev"
         >
           <svg
             width="16"
@@ -63,7 +63,7 @@ export default function MovieCard({
       ) : null}
 
       <div className="relative flex-1">
-        <div className="aspect-[2/3] w-full overflow-hidden rounded-[15px] bg-[rgba(255,255,255,0.03)] dark:bg-[rgba(255,255,255,0.02)]">
+        <div className="aspect-[2/3] w-full overflow-hidden rounded-[15px] bg-mn-input/40">
           {posterSrc ? (
             <img
               src={posterSrc}
@@ -72,11 +72,11 @@ export default function MovieCard({
               loading="lazy"
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[rgba(168,85,247,0.18)] to-[rgba(34,211,238,0.08)] px-4 text-center">
-              <div className="text-xs font-medium text-zinc-500 dark:text-zinc-300">
+            <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[color-mix(in_srgb,var(--mn-accent)_22%,transparent)] to-[color-mix(in_srgb,var(--mn-accent-2)_14%,transparent)] px-4 text-center">
+              <div className="text-xs font-medium text-mn-fg-muted">
                 No poster image
               </div>
-              <div className="line-clamp-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              <div className="line-clamp-2 text-sm font-semibold text-mn-fg">
                 {movie.title}
               </div>
             </div>
@@ -88,17 +88,13 @@ export default function MovieCard({
         <div>
           {titleNode ?? (
             <>
-              <h2 className="line-clamp-2 text-base font-semibold leading-5">
+              <h2 className="line-clamp-2 text-base font-semibold leading-5 text-mn-fg">
                 {movie.title}
               </h2>
               {year ? (
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {year}
-                </p>
+                <p className="mt-1 text-sm text-mn-fg-muted">{year}</p>
               ) : (
-                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                  Year unknown
-                </p>
+                <p className="mt-1 text-sm text-mn-fg-muted">Year unknown</p>
               )}
             </>
           )}

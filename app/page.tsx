@@ -3,24 +3,39 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRef, useState } from "react";
+import SaveMoviePromptModal from "../components/SaveMoviePromptModal";
+import WatchlistCardRatingsRow from "../components/WatchlistCardRatingsRow";
+import EmptyCard from "../components/EmptyCard";
 import {
   PassedRibbon,
   WatchlistGroupControls,
 } from "../components/WatchlistGroupControls";
+import { useAuth } from "../hooks/useAuth";
 import { useMovieLibrary } from "../hooks/useMovieLibrary";
 import {
+  categoryLabels,
+  copyGenreIdsForPersist,
+  mergeWatchedRatingPatch,
   recommendedByLabel,
   calculateGroupAverage,
   youtubeVideoIdFromUrl,
+  type LibraryCategory,
+  type LibraryItem,
 } from "../lib/movieLibrary";
+import {
+  everyoneHasSeenIt,
+  normalizeSeenIt,
+  seenPersonForMovieNightUser,
+  setSeenTrueForPerson,
+} from "../lib/watchlistGroup";
 
 const posterBase = "https://image.tmdb.org/t/p/w500";
 
 function RecommendedByFooter({ name }: { name: string }) {
   return (
-    <div className="mt-auto flex items-start gap-1.5 border-t border-zinc-200/50 pt-2 dark:border-zinc-700/50">
+    <div className="mt-auto flex items-start gap-1.5 border-t border-mn-border pt-2">
       <svg
-        className="mt-0.5 h-3 w-3 shrink-0 text-zinc-400"
+        className="mt-0.5 h-3 w-3 shrink-0 text-mn-fg-muted"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -30,13 +45,9 @@ function RecommendedByFooter({ name }: { name: string }) {
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
         <circle cx="12" cy="7" r="4" />
       </svg>
-      <p className="min-w-0 leading-snug text-[10px] text-zinc-600 dark:text-zinc-400 sm:text-xs">
-        <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-          Recommended by:
-        </span>{" "}
-        <span className="font-medium text-zinc-900 dark:text-zinc-100">
-          {name}
-        </span>
+      <p className="min-w-0 leading-snug text-[10px] text-mn-fg-muted sm:text-xs">
+        <span className="font-semibold text-mn-fg-soft">Recommended by:</span>{" "}
+        <span className="font-medium text-mn-fg">{name}</span>
       </p>
     </div>
   );
@@ -55,7 +66,22 @@ function resetAllSearchState() {
 }
 
 export default function Home() {
-  const { hydrated, library, removeMovie, patchLibraryItem } = useMovieLibrary();
+  const { user } = useAuth();
+  const {
+    hydrated,
+    library,
+    removeMovie,
+    patchLibraryItem,
+    moveMovie,
+  } = useMovieLibrary();
+
+  const [savePromptOpen, setSavePromptOpen] = useState(false);
+  const [savePromptCategory, setSavePromptCategory] =
+    useState<LibraryCategory | null>(null);
+  const [savePromptMovie, setSavePromptMovie] = useState<LibraryItem | null>(
+    null,
+  );
+  const [toast, setToast] = useState<string | null>(null);
 
   const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -91,6 +117,27 @@ export default function Home() {
     }, 2200);
   }
 
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(null), 2500);
+  }
+
+  /** When the third person marks “seen” on the watchlist, open ratings → Watched. */
+  function promoteIfWatchlistEveryoneSeen(
+    movieBefore: LibraryItem,
+    nextItem: LibraryItem,
+  ) {
+    const onWl = library.watchlist.some((m) => m.docId === movieBefore.docId);
+    if (!onWl) return;
+    const wasAll = everyoneHasSeenIt(movieBefore);
+    const nowAll = everyoneHasSeenIt(nextItem);
+    if (!wasAll && nowAll) {
+      setSavePromptCategory("watched");
+      setSavePromptMovie(nextItem);
+      setSavePromptOpen(true);
+    }
+  }
+
   function undoDelete() {
     if (pendingDeleteId === null) return;
     if (deleteTimerRef.current) window.clearTimeout(deleteTimerRef.current);
@@ -107,22 +154,32 @@ export default function Home() {
   }
 
   const searchCardClass =
-    "group relative flex min-h-[120px] flex-col justify-between overflow-hidden rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-white/95 via-cyan-50/40 to-violet-100/50 p-4 shadow-[0_0_24px_rgba(34,211,238,0.1)] transition hover:border-cyan-400/50 hover:shadow-[0_0_32px_rgba(139,92,246,0.15)] dark:border-cyan-500/20 dark:from-zinc-900/90 dark:via-zinc-950 dark:to-violet-950/40 dark:hover:border-cyan-400/35 sm:min-h-[140px] sm:p-5";
+    "group relative flex min-h-[120px] flex-col justify-between overflow-hidden rounded-2xl border border-mn-border-strong bg-gradient-to-br from-mn-card via-mn-input/40 to-mn-card-elev p-4 shadow-[var(--mn-shadow-glow)] transition hover:border-mn-accent/50 hover:shadow-[var(--mn-shadow-soft)] sm:min-h-[140px] sm:p-5";
 
   return (
-    <div className="min-h-screen font-sans text-zinc-900 dark:text-zinc-50">
+    <div className="min-h-screen pb-[max(env(safe-area-inset-bottom),24px)] font-sans text-mn-fg">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         <header className="max-w-3xl">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-mn-accent-2">
+            Movie lounge
+          </p>
+          <h1 className="text-[clamp(1.6rem,5vw,2.2rem)] font-semibold tracking-tight">
             Movie Night
           </h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Search the movie database, build your library, and spin the roulette. Misc links:
-            use{" "}
-            <span className="font-medium text-zinc-800 dark:text-zinc-200">
-              + Add Misc
-            </span>{" "}
-            in the header.
+          {user ? (
+            <p className="mt-2 text-sm text-mn-fg-muted">
+              Hi, {user.name} — pick something good.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-mn-fg-muted">
+              Sign in from the header to save ratings and sync your library.
+            </p>
+          )}
+          <p className="mt-2 text-sm text-mn-fg-muted">
+            Search the movie database, build your library, and spin the roulette.
+            Misc links: use{" "}
+            <span className="font-medium text-mn-accent">+ Add Misc</span> in the
+            header.
           </p>
         </header>
 
@@ -133,15 +190,17 @@ export default function Home() {
             className={searchCardClass}
           >
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-mn-accent">
                 Search database
               </p>
-              <h2 className="mt-1 text-lg font-semibold">Movie &amp; TV search</h2>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              <h2 className="mt-1 text-lg font-semibold text-mn-fg">
+                Movie &amp; TV search
+              </h2>
+              <p className="mt-1 text-sm text-mn-fg-muted">
                 Find films and shows, then save to Library → Movies or TV.
               </p>
             </div>
-            <span className="text-sm font-medium text-violet-600 group-hover:underline dark:text-violet-400">
+            <span className="text-sm font-medium text-mn-accent group-hover:underline">
               Open search →
             </span>
           </Link>
@@ -149,6 +208,9 @@ export default function Home() {
 
         <section className="mt-12">
           <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-mn-accent-2">
+              Last watched
+            </p>
             <motion.h2
               initial={{ x: -18, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -158,23 +220,23 @@ export default function Home() {
                 damping: 22,
                 mass: 0.6,
               }}
-              className="text-2xl font-semibold tracking-tight"
+              className="text-2xl font-semibold tracking-tight text-mn-fg"
             >
               Recently Watched
             </motion.h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-mn-fg-muted">
               Last items you marked watched.
             </p>
           </div>
 
           {!hydrated ? (
-            <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-              Syncing library…
-            </div>
+            <EmptyCard
+              className="mt-6"
+              title="Syncing library…"
+              description="Hang tight — your lists will show up in a moment."
+            />
           ) : library.watched.length === 0 ? (
-            <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-              Nothing in Watched yet.
-            </div>
+            <EmptyCard className="mt-6" title="Nothing in Watched yet." />
           ) : (
             <div className="mt-6 flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 scrollbar-hide scroll-smooth touch-pan-x md:grid md:gap-6 md:overflow-visible md:snap-none md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               <AnimatePresence initial={false}>
@@ -224,7 +286,7 @@ export default function Home() {
                             type="button"
                             onClick={() => requestDelete(movie.docId)}
                             aria-label="Remove from library"
-                            className="absolute right-3 top-3 z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-white/90 p-3 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white dark:bg-black/60 dark:text-zinc-200 dark:ring-zinc-800"
+                            className="absolute right-3 top-3 z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-mn-modal/95 p-3 text-mn-fg shadow-sm ring-1 ring-mn-border hover:bg-mn-card-elev"
                           >
                             <svg
                               width="16"
@@ -301,19 +363,19 @@ export default function Home() {
                             </div>
 
                             <div className="digital-readout rounded-xl p-2.5 sm:p-3">
-                              <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:text-zinc-300 sm:text-xs sm:normal-case sm:tracking-normal">
+                              <p className="text-[10px] font-medium uppercase tracking-wide text-mn-fg-muted sm:text-xs sm:normal-case sm:tracking-normal">
                                 Ratings (1-10)
                               </p>
-                              <p className="mt-1 text-xs font-semibold tracking-tight text-cyan-200 dark:text-cyan-200 sm:text-sm">
+                              <p className="mt-1 font-mono text-xs font-semibold tracking-tight text-mn-accent sm:text-sm">
                                 A: {formatRating10(movie.alexRating)}, B:{" "}
                                 {formatRating10(movie.brittonRating)}, N:{" "}
                                 {formatRating10(movie.nabiRating)}
                               </p>
                               <div className="mt-2 flex items-center justify-between gap-4 border-t border-white/10 pt-2 sm:mt-3 sm:pt-3">
-                                <p className="text-[10px] font-medium text-zinc-600 dark:text-zinc-300 sm:text-xs">
+                                <p className="text-[10px] font-medium text-mn-fg-muted sm:text-xs">
                                   Group Average
                                 </p>
-                                <p className="text-base font-black text-zinc-900 dark:text-zinc-50 sm:text-lg">
+                                <p className="font-mono text-base font-black text-mn-fg sm:text-lg">
                                   {avg !== null ? avg : "-"}
                                 </p>
                               </div>
@@ -324,11 +386,12 @@ export default function Home() {
                               disabled={!hydrated}
                               compact
                               showPass={false}
-                              onPatch={(next) =>
+                              onPatch={(next) => {
                                 patchLibraryItem(movie.docId, {
                                   seenIt: next.seenIt,
-                                })
-                              }
+                                });
+                                promoteIfWatchlistEveryoneSeen(movie, next);
+                              }}
                             />
 
                             <RecommendedByFooter name={by} />
@@ -344,20 +407,27 @@ export default function Home() {
 
         <section className="mt-12">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Watchlist</h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Saved titles you have not watched yet.
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-mn-accent-3">
+              Queue
+            </p>
+            <h2 className="text-2xl font-semibold tracking-tight text-mn-fg">
+              Watchlist
+            </h2>
+            <p className="mt-1 text-sm text-mn-fg-muted">
+              Tap Watched to rate. The title stays here until Alex, Britton, and
+              Nabi have all marked watched (Watched or A/B/N), then it moves to
+              Recently Watched.
             </p>
           </div>
 
           {!hydrated ? (
-            <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-              Syncing library…
-            </div>
+            <EmptyCard
+              className="mt-6"
+              title="Syncing library…"
+              description="Hang tight — your lists will show up in a moment."
+            />
           ) : library.watchlist.length === 0 ? (
-            <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-              Nothing in your Watchlist yet.
-            </div>
+            <EmptyCard className="mt-6" title="Nothing in your Watchlist yet." />
           ) : (
             <div className="mt-6 flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 scrollbar-hide scroll-smooth touch-pan-x md:grid md:gap-6 md:overflow-visible md:snap-none md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {library.watchlist
@@ -392,7 +462,7 @@ export default function Home() {
                           type="button"
                           onClick={() => requestDelete(movie.docId)}
                           aria-label="Remove from library"
-                          className="absolute right-3 top-3 z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-white/90 p-3 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white dark:bg-black/60 dark:text-zinc-200 dark:ring-zinc-800"
+                          className="absolute right-3 top-3 z-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-mn-modal/95 p-3 text-mn-fg shadow-sm ring-1 ring-mn-border hover:bg-mn-card-elev"
                         >
                           <svg
                             width="18"
@@ -474,14 +544,49 @@ export default function Home() {
                             disabled={!hydrated}
                             compact
                             showPass
-                            onPatch={(next) =>
+                            onPatch={(next) => {
                               patchLibraryItem(movie.docId, {
                                 seenIt: next.seenIt,
                                 passed: next.passed,
                                 passedBy: next.passedBy,
-                              })
-                            }
+                              });
+                              promoteIfWatchlistEveryoneSeen(movie, next);
+                            }}
                           />
+
+                          <WatchlistCardRatingsRow item={movie} compact />
+
+                          <button
+                            type="button"
+                            disabled={!hydrated || !user}
+                            title={
+                              !user
+                                ? "Sign in from the header to mark as watched"
+                                : undefined
+                            }
+                            onClick={() => {
+                              if (!user) return;
+                              const person = seenPersonForMovieNightUser(
+                                user.name,
+                              );
+                              const baseline = normalizeSeenIt(movie);
+                              const nextForModal = setSeenTrueForPerson(
+                                movie,
+                                person,
+                              );
+                              if (!baseline[person]) {
+                                patchLibraryItem(movie.docId, {
+                                  seenIt: nextForModal.seenIt,
+                                });
+                              }
+                              setSavePromptCategory("watched");
+                              setSavePromptMovie(nextForModal);
+                              setSavePromptOpen(true);
+                            }}
+                            className="w-full min-h-[44px] rounded-xl border border-mn-border bg-mn-input px-4 py-3 text-sm font-medium text-mn-fg shadow-sm transition hover:bg-mn-card-elev disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Watched
+                          </button>
 
                           <RecommendedByFooter name={by} />
                         </div>
@@ -494,13 +599,92 @@ export default function Home() {
         </section>
       </div>
 
+      <SaveMoviePromptModal
+        open={savePromptOpen}
+        category={savePromptCategory}
+        ratedByUserName={user?.name ?? null}
+        ratingBaseItem={savePromptMovie}
+        onCancel={() => {
+          setSavePromptOpen(false);
+          setSavePromptCategory(null);
+          setSavePromptMovie(null);
+        }}
+        onSave={(args) => {
+          if (!savePromptMovie || !savePromptCategory) return;
+          if (!user) return;
+
+          if (savePromptCategory === "watched") {
+            const live =
+              library.watchlist.find(
+                (m) => m.docId === savePromptMovie.docId,
+              ) ??
+              library.watched.find((m) => m.docId === savePromptMovie.docId) ??
+              savePromptMovie;
+
+            const merged = setSeenTrueForPerson(
+              {
+                ...live,
+                genreIds: copyGenreIdsForPersist(savePromptMovie),
+                recommendedBy: user.name,
+                ...mergeWatchedRatingPatch(live, args),
+              },
+              seenPersonForMovieNightUser(user.name),
+            );
+
+            const stillOnWatchlist = library.watchlist.some(
+              (m) => m.docId === merged.docId,
+            );
+
+            if (stillOnWatchlist && !everyoneHasSeenIt(merged)) {
+              patchLibraryItem(merged.docId, {
+                seenIt: merged.seenIt,
+                alexRating: merged.alexRating,
+                brittonRating: merged.brittonRating,
+                nabiRating: merged.nabiRating,
+                groupRatings: merged.groupRatings,
+              });
+              showToast(
+                "Rating saved on your watchlist. It moves to Watched when everyone has watched.",
+              );
+            } else {
+              moveMovie(merged, "watched");
+              showToast(`Moved to ${categoryLabels.watched}.`);
+            }
+          } else {
+            const nextMovie: LibraryItem = {
+              ...savePromptMovie,
+              genreIds: copyGenreIdsForPersist(savePromptMovie),
+              recommendedBy: user.name,
+              alexRating: null,
+              brittonRating: null,
+              nabiRating: null,
+              groupRatings: undefined,
+            };
+            moveMovie(nextMovie, savePromptCategory);
+            showToast(
+              `Moved to ${categoryLabels[savePromptCategory]}.`,
+            );
+          }
+
+          setSavePromptOpen(false);
+          setSavePromptCategory(null);
+          setSavePromptMovie(null);
+        }}
+      />
+
+      {toast ? (
+        <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-mn-border bg-mn-modal px-4 py-2 text-sm text-mn-fg shadow-[var(--mn-shadow-soft)]">
+          {toast}
+        </div>
+      ) : null}
+
       {undoMessage ? (
-        <div className="fixed bottom-5 left-1/2 z-[65] -translate-x-1/2 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900">
+        <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-[65] -translate-x-1/2 rounded-xl border border-mn-border bg-mn-modal px-4 py-2 text-sm text-mn-fg shadow-[var(--mn-shadow-soft)]">
           <span>{undoMessage}</span>
           <button
             type="button"
             onClick={undoDelete}
-            className="ml-3 inline-flex rounded-lg bg-white/15 px-2 py-1 text-xs font-semibold text-white hover:bg-white/25 dark:bg-zinc-900/10 dark:text-zinc-900 dark:hover:bg-zinc-900/20"
+            className="ml-3 inline-flex rounded-lg bg-mn-accent/20 px-2 py-1 text-xs font-semibold text-mn-accent hover:bg-mn-accent/30"
           >
             Undo
           </button>

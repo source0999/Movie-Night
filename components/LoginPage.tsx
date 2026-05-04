@@ -3,8 +3,18 @@
 import { useMemo, useState } from "react";
 import type { MovieNightUserName } from "../lib/auth";
 import { USER_ADMIN_FLAGS } from "../lib/auth";
+import ThemeSwitcher from "./ThemeSwitcher";
 
 const USERNAMES: MovieNightUserName[] = ["Britton", "Nabi", "Alex"];
+
+const USER_META: Record<
+  MovieNightUserName,
+  { initial: string; hint: string }
+> = {
+  Britton: { initial: "B", hint: "Admin" },
+  Nabi: { initial: "N", hint: "Standard" },
+  Alex: { initial: "A", hint: "Standard" },
+};
 
 export default function LoginPage({
   onLogin,
@@ -15,82 +25,154 @@ export default function LoginPage({
 }) {
   const [username, setUsername] = useState<MovieNightUserName>("Britton");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const isAdmin = useMemo(() => USER_ADMIN_FLAGS[username], [username]);
 
   return (
-    <div className="min-h-screen bg-zinc-50 font-sans text-zinc-900 dark:bg-black dark:text-zinc-50">
-      <div className="mx-auto max-w-md px-4 py-14">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h1 className="text-2xl font-semibold tracking-tight">Movie Night</h1>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Please log in to continue.
-          </p>
+    <div className="relative min-h-screen bg-mn-bg px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3rem,env(safe-area-inset-top))] font-sans text-mn-fg">
+      <div className="pointer-events-auto fixed right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[100] sm:right-6">
+        <ThemeSwitcher />
+      </div>
 
-          <form
-            className="mt-6 space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              onLogin({ username, password });
-            }}
-          >
-            <div>
-              <label
-                htmlFor="username"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-200"
-              >
-                User
-              </label>
-              <select
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value as MovieNightUserName)}
-                className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:ring-zinc-800"
-              >
-                {USERNAMES.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                    {u === "Britton" ? " (admin)" : ""}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                {isAdmin ? "Admin access." : "Standard access."}
-              </p>
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-200"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:ring-zinc-800"
-              />
-            </div>
-
-            {error ? (
-              <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
-                {error}
-              </p>
-            ) : null}
-
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
+      <div className="mx-auto max-w-md">
+        <div
+          className="overflow-hidden rounded-[var(--mn-radius-lg)] p-[1px] shadow-[var(--mn-shadow-glow)]"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--mn-accent), var(--mn-accent-2), var(--mn-accent-3))",
+          }}
+        >
+          <div className="rounded-[calc(var(--mn-radius-lg)-1px)] bg-mn-card p-6 sm:p-8">
+            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-mn-accent">
+              Friend group
+            </p>
+            <h1
+              className="mt-2 text-[clamp(1.75rem,6vw,2.25rem)] font-bold tracking-tight"
+              style={{
+                fontFamily: "var(--font-orbitron), system-ui, sans-serif",
+              }}
             >
-              Log in
-            </button>
-          </form>
+              <span className="text-mn-accent">Movie</span> Night
+            </h1>
+            <p className="mt-2 text-sm text-mn-fg-muted">
+              Log in to search, save, and spin the roulette with your crew.
+            </p>
+
+            <form
+              className="mt-8 space-y-5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                onLogin({ username, password });
+              }}
+            >
+              <div>
+                <span
+                  id="username-label"
+                  className="block text-sm font-medium text-mn-fg"
+                >
+                  Who&apos;s watching?
+                </span>
+                <div
+                  className="mt-3 grid grid-cols-3 gap-2"
+                  role="group"
+                  aria-labelledby="username-label"
+                >
+                  {USERNAMES.map((u) => {
+                    const active = username === u;
+                    const meta = USER_META[u];
+                    return (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setUsername(u)}
+                        aria-pressed={active}
+                        className={`mn-btn-press flex min-h-[88px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-3 text-center transition touch-manipulation ${
+                          active
+                            ? "border-mn-border-strong bg-mn-accent/15 text-mn-accent ring-2 ring-mn-accent/40"
+                            : "border-mn-border bg-mn-input text-mn-fg hover:border-mn-border-strong hover:bg-mn-card-elev"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-11 w-11 items-center justify-center rounded-full text-lg font-black ${
+                            active
+                              ? "bg-mn-accent text-mn-bg"
+                              : "bg-mn-card-elev text-mn-fg-muted"
+                          }`}
+                        >
+                          {meta.initial}
+                        </span>
+                        <span className="text-xs font-semibold">{u}</span>
+                        {u === "Britton" ? (
+                          <span className="text-[10px] text-mn-fg-soft">
+                            Admin
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-mn-fg-soft">
+                            {meta.hint}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-mn-fg"
+                >
+                  Password
+                </label>
+                <div className="relative mt-1">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    className="w-full min-h-[48px] rounded-xl border border-mn-border bg-mn-input px-3 py-3 pr-24 text-sm text-mn-fg outline-none transition focus:border-mn-border-strong focus:ring-2 focus:ring-mn-accent/30"
+                  />
+                  <button
+                    type="button"
+                    className="mn-btn-press absolute right-2 top-1/2 min-h-[40px] -translate-y-1/2 rounded-lg px-2 text-xs font-semibold text-mn-accent touch-manipulation"
+                    onClick={() => setShowPassword((s) => !s)}
+                    aria-pressed={showPassword}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+
+              {isAdmin ? (
+                <p className="text-xs text-mn-fg-muted">
+                  You&apos;re signing in with admin privileges.
+                </p>
+              ) : null}
+
+              {error ? (
+                <p
+                  role="alert"
+                  className="rounded-xl border border-mn-danger/50 bg-mn-danger/10 px-3 py-2 text-sm text-mn-danger"
+                >
+                  {error}
+                </p>
+              ) : null}
+
+              <button
+                type="submit"
+                className="mn-btn-press w-full min-h-[48px] rounded-xl bg-mn-accent px-4 py-3 text-sm font-bold text-mn-bg shadow-[var(--mn-shadow-soft)] transition hover:brightness-110 touch-manipulation"
+              >
+                Log in
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

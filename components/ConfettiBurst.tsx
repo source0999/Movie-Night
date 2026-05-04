@@ -57,12 +57,40 @@ export default function ConfettiBurst({
     const onResize = () => resize();
     window.addEventListener("resize", onResize);
 
-    // Purple + cyan palette for a high-tech celebratory burst
-    const colors = ["#A855F7", "#22D3EE", "#60A5FA", "#34D399", "#C084FC"];
+    const root = document.documentElement;
+    const cs = getComputedStyle(root);
+    const pick = (name: string, fallback: string) => {
+      const v = cs.getPropertyValue(name).trim();
+      return v || fallback;
+    };
+    const colors = [
+      pick("--mn-accent", "#bd93d8"),
+      pick("--mn-accent-2", "#7bcdba"),
+      pick("--mn-accent-3", "#9799ca"),
+      pick("--mn-success", "#61e294"),
+      pick("--mn-warning", "#fbbf24"),
+    ];
+
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const effectiveDuration = reducedMotion
+      ? Math.min(durationMs, 600)
+      : durationMs;
 
     const particles: Particle[] = [];
-    const baseCount = intensity === "celebration" ? 220 : 95;
-    const countExtra = intensity === "celebration" ? 80 : 25;
+    const baseCount = reducedMotion
+      ? intensity === "celebration"
+        ? 48
+        : 28
+      : intensity === "celebration"
+        ? 220
+        : 95;
+    const countExtra = reducedMotion
+      ? 10
+      : intensity === "celebration"
+        ? 80
+        : 25;
     const count = Math.floor(baseCount + Math.random() * countExtra);
     const vxScale = intensity === "celebration" ? 1.6 : 1;
     const vyScale = intensity === "celebration" ? 1.35 : 1;
@@ -79,7 +107,7 @@ export default function ConfettiBurst({
         h: rand(intensity === "celebration" ? 12 : 10, intensity === "celebration" ? 20 : 16),
         color: colors[Math.floor(Math.random() * colors.length)],
         life: 0,
-        maxLife: rand(durationMs * 0.6, durationMs),
+        maxLife: rand(effectiveDuration * 0.6, effectiveDuration),
       });
     }
 
@@ -112,7 +140,7 @@ export default function ConfettiBurst({
       ctx.restore();
       ctx.globalAlpha = 1;
 
-      if (elapsed < durationMs) {
+      if (elapsed < effectiveDuration) {
         rafRef.current = window.requestAnimationFrame(tick);
       }
     };

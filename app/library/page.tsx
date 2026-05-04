@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import CategoryDropdown from "../../components/CategoryDropdown";
 import { useMovieLibrary } from "../../hooks/useMovieLibrary";
 import {
   categoryLabels,
   copyGenreIdsForPersist,
   libraryTabLabels,
+  mergeWatchedRatingPatch,
   recommendedByLabel,
   youtubeVideoIdFromUrl,
   type LibraryCategory,
@@ -15,12 +15,20 @@ import {
   type LibraryMediaType,
 } from "../../lib/movieLibrary";
 import SaveMoviePromptModal from "../../components/SaveMoviePromptModal";
+import WatchlistCardRatingsRow from "../../components/WatchlistCardRatingsRow";
+import EmptyCard from "../../components/EmptyCard";
 import {
   PassedRibbon,
   WatchlistGroupControls,
 } from "../../components/WatchlistGroupControls";
 import { calculateGroupAverage } from "../../lib/movieLibrary";
 import { useAuth } from "../../hooks/useAuth";
+import {
+  everyoneHasSeenIt,
+  normalizeSeenIt,
+  seenPersonForMovieNightUser,
+  setSeenTrueForPerson,
+} from "../../lib/watchlistGroup";
 
 const posterBase = "https://image.tmdb.org/t/p/w500";
 
@@ -62,16 +70,24 @@ export default function LibraryPage() {
   const [undoMessage, setUndoMessage] = useState<string | null>(null);
   const deleteTimerRef = useRef<number | null>(null);
 
-  const moveOptions = useMemo(() => {
-    return ALL_CATEGORIES.filter((c) => c !== activeCategory).map((c) => ({
-      value: c,
-      label: categoryLabels[c],
-    }));
-  }, [activeCategory]);
-
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(null), 2500);
+  }
+
+  function promoteIfWatchlistEveryoneSeen(
+    movieBefore: LibraryItem,
+    nextItem: LibraryItem,
+  ) {
+    const onWl = library.watchlist.some((m) => m.docId === movieBefore.docId);
+    if (!onWl) return;
+    const wasAll = everyoneHasSeenIt(movieBefore);
+    const nowAll = everyoneHasSeenIt(nextItem);
+    if (!wasAll && nowAll) {
+      setSavePromptCategory("watched");
+      setSavePromptMovie(nextItem);
+      setSavePromptOpen(true);
+    }
   }
 
   function formatRating10(value: number | null | undefined) {
@@ -119,20 +135,18 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 py-10 text-zinc-900 dark:bg-black dark:text-zinc-50">
+    <div className="min-h-screen py-10 text-mn-fg pb-[max(env(safe-area-inset-bottom),24px)]">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h1 className="text-[clamp(1.6rem,5vw,2.2rem)] font-semibold tracking-tight sm:text-3xl">
                 My Library
               </h1>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                Movies and TV from the movie database, plus misc links (YouTube, TikTok, etc.).
-                Use{" "}
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">
-                  + Add Misc
-                </span>{" "}
+              <p className="mt-1 text-sm text-mn-fg-muted">
+                Movies and TV from the movie database, plus misc links (YouTube,
+                TikTok, etc.). Use{" "}
+                <span className="font-medium text-mn-accent">+ Add Misc</span>{" "}
                 in the header to save a URL.
               </p>
             </div>
@@ -145,10 +159,10 @@ export default function LibraryPage() {
                     key={tab}
                     type="button"
                     onClick={() => setLibraryTab(tab)}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                    className={`rounded-xl px-3 py-2 text-sm font-medium transition touch-manipulation ${
                       active
-                        ? "bg-violet-600 text-white dark:bg-violet-500"
-                        : "border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
+                        ? "bg-mn-accent text-mn-bg shadow-[var(--mn-shadow-glow)]"
+                        : "border border-mn-border bg-mn-input text-mn-fg hover:bg-mn-card-elev"
                     }`}
                     aria-current={active ? "page" : undefined}
                   >
@@ -159,7 +173,7 @@ export default function LibraryPage() {
               {libraryTab === "misc" && isWatchlist ? (
                 <Link
                   href="/roulette?media=misc"
-                  className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-md hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
+                  className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-mn-border-strong bg-mn-card-elev px-4 py-2 text-sm font-semibold text-mn-accent shadow-md transition hover:bg-mn-input"
                 >
                   Random misc
                 </Link>
@@ -167,20 +181,25 @@ export default function LibraryPage() {
             </div>
           </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {ALL_CATEGORIES.map((cat) => {
+          <div
+            className="inline-flex flex-wrap gap-1 rounded-xl border border-mn-border bg-mn-input/60 p-1"
+            role="tablist"
+            aria-label="Watchlist or Watched"
+          >
+            {ALL_CATEGORIES.map((cat) => {
               const active = cat === activeCategory;
               return (
                 <button
                   key={cat}
                   type="button"
+                  role="tab"
+                  aria-selected={active}
                   onClick={() => setActiveCategory(cat)}
-                  className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                  className={`rounded-lg px-4 py-2 text-sm font-medium transition touch-manipulation ${
                     active
-                      ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-black"
-                      : "border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
+                      ? "bg-mn-card-elev text-mn-accent shadow-sm"
+                      : "text-mn-fg-muted hover:text-mn-fg"
                   }`}
-                  aria-current={active ? "page" : undefined}
                 >
                   {categoryLabels[cat]}
                 </button>
@@ -191,17 +210,14 @@ export default function LibraryPage() {
 
         <section className="mt-8">
           {!hydrated && movies.length === 0 ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-              <p>Syncing library…</p>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                Your saved titles will appear here in a moment.
-              </p>
-            </div>
+            <EmptyCard
+              title="Syncing library…"
+              description="Your saved titles will appear here in a moment."
+            />
           ) : movies.length === 0 ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-              Nothing in {libraryTabLabels[libraryTab]} —{" "}
-              {categoryLabels[activeCategory]} yet.
-            </div>
+            <EmptyCard
+              title={`Nothing in ${libraryTabLabels[libraryTab]} — ${categoryLabels[activeCategory]} yet.`}
+            />
           ) : (
               <div className="mt-2 grid gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {movies.map((movie: LibraryItem) => {
@@ -315,14 +331,19 @@ export default function LibraryPage() {
                           item={movie}
                           disabled={!hydrated}
                           showPass
-                          onPatch={(next) =>
+                          onPatch={(next) => {
                             patchLibraryItem(movie.docId, {
                               seenIt: next.seenIt,
                               passed: next.passed,
                               passedBy: next.passedBy,
-                            })
-                          }
+                            });
+                            promoteIfWatchlistEveryoneSeen(movie, next);
+                          }}
                         />
+                      ) : null}
+
+                      {isWatchlist ? (
+                        <WatchlistCardRatingsRow item={movie} />
                       ) : null}
 
                       {isWatched ? (
@@ -363,7 +384,7 @@ export default function LibraryPage() {
                         {isWatchlist && movie.mediaType === "misc" ? (
                           <Link
                             href="/roulette?media=misc"
-                            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-violet-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-violet-500 dark:bg-violet-500 dark:hover:bg-violet-400"
+                            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-mn-accent px-3 py-2 text-center text-sm font-semibold text-mn-bg shadow-[var(--mn-shadow-soft)] transition hover:opacity-95"
                           >
                             Shuffle
                           </Link>
@@ -372,7 +393,7 @@ export default function LibraryPage() {
                           type="button"
                           onClick={() => requestDelete(movie.docId)}
                           aria-label="Delete item"
-                          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-zinc-200 bg-white p-3 text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900/70"
+                          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-mn-border bg-mn-input p-3 text-mn-fg transition hover:bg-mn-card-elev"
                         >
                           <svg
                             width="18"
@@ -394,17 +415,57 @@ export default function LibraryPage() {
                           </svg>
                         </button>
 
-                        <CategoryDropdown
-                          summaryLabel="Move to..."
-                          options={moveOptions}
-                          disabled={!hydrated}
-                          align="left"
-                          onSelect={(cat) => {
-                            setSavePromptCategory(cat);
-                            setSavePromptMovie(movie);
-                            setSavePromptOpen(true);
-                          }}
-                        />
+                        {isWatchlist ? (
+                          <button
+                            type="button"
+                            disabled={!hydrated || !user}
+                            title={
+                              !user
+                                ? "Sign in from the header to mark as watched"
+                                : undefined
+                            }
+                            onClick={() => {
+                              if (!user) return;
+                              const person = seenPersonForMovieNightUser(
+                                user.name,
+                              );
+                              const baseline = normalizeSeenIt(movie);
+                              const nextForModal = setSeenTrueForPerson(
+                                movie,
+                                person,
+                              );
+                              if (!baseline[person]) {
+                                patchLibraryItem(movie.docId, {
+                                  seenIt: nextForModal.seenIt,
+                                });
+                              }
+                              setSavePromptCategory("watched");
+                              setSavePromptMovie(nextForModal);
+                              setSavePromptOpen(true);
+                            }}
+                            className="min-h-[44px] rounded-xl border border-mn-border bg-mn-input px-4 py-3 text-sm font-medium text-mn-fg shadow-sm transition hover:bg-mn-card-elev disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Watch
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={!hydrated || !user}
+                            title={
+                              !user
+                                ? "Sign in from the header to move titles"
+                                : undefined
+                            }
+                            onClick={() => {
+                              setSavePromptCategory("watchlist");
+                              setSavePromptMovie(movie);
+                              setSavePromptOpen(true);
+                            }}
+                            className="min-h-[44px] rounded-xl border border-mn-border bg-mn-input px-4 py-3 text-sm font-medium text-mn-fg shadow-sm transition hover:bg-mn-card-elev disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {categoryLabels.watchlist}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -418,6 +479,8 @@ export default function LibraryPage() {
       <SaveMoviePromptModal
         open={savePromptOpen}
         category={savePromptCategory}
+        ratedByUserName={user?.name ?? null}
+        ratingBaseItem={savePromptMovie}
         onCancel={() => {
           setSavePromptOpen(false);
           setSavePromptCategory(null);
@@ -427,30 +490,56 @@ export default function LibraryPage() {
           if (!savePromptMovie || !savePromptCategory) return;
           if (!user) return;
 
-          const nextMovie: LibraryItem = {
-            ...savePromptMovie,
-            genreIds: copyGenreIdsForPersist(savePromptMovie),
-            recommendedBy: user.name,
-            alexRating:
-              savePromptCategory === "watched" ? args.alexRating ?? null : null,
-            brittonRating:
-              savePromptCategory === "watched"
-                ? args.brittonRating ?? null
-                : null,
-            nabiRating:
-              savePromptCategory === "watched" ? args.nabiRating ?? null : null,
-            groupRatings:
-              savePromptCategory === "watched"
-                ? {
-                    alex: args.alexRating ?? null,
-                    britton: args.brittonRating ?? null,
-                    nabi: args.nabiRating ?? null,
-                  }
-                : undefined,
-          };
+          if (savePromptCategory === "watchlist") {
+            const nextMovie: LibraryItem = {
+              ...savePromptMovie,
+              genreIds: copyGenreIdsForPersist(savePromptMovie),
+              recommendedBy: user.name,
+              alexRating: null,
+              brittonRating: null,
+              nabiRating: null,
+              groupRatings: undefined,
+            };
+            moveMovie(nextMovie, "watchlist");
+            showToast(`Moved to ${categoryLabels.watchlist}.`);
+          } else {
+            const live =
+              library.watchlist.find(
+                (m) => m.docId === savePromptMovie.docId,
+              ) ??
+              library.watched.find((m) => m.docId === savePromptMovie.docId) ??
+              savePromptMovie;
 
-          moveMovie(nextMovie, savePromptCategory);
-          showToast(`Moved to ${categoryLabels[savePromptCategory]}.`);
+            const merged = setSeenTrueForPerson(
+              {
+                ...live,
+                genreIds: copyGenreIdsForPersist(savePromptMovie),
+                recommendedBy: user.name,
+                ...mergeWatchedRatingPatch(live, args),
+              },
+              seenPersonForMovieNightUser(user.name),
+            );
+
+            const stillOnWatchlist = library.watchlist.some(
+              (m) => m.docId === merged.docId,
+            );
+
+            if (stillOnWatchlist && !everyoneHasSeenIt(merged)) {
+              patchLibraryItem(merged.docId, {
+                seenIt: merged.seenIt,
+                alexRating: merged.alexRating,
+                brittonRating: merged.brittonRating,
+                nabiRating: merged.nabiRating,
+                groupRatings: merged.groupRatings,
+              });
+              showToast(
+                "Rating saved on Watchlist. It moves to Watched when everyone has watched.",
+              );
+            } else {
+              moveMovie(merged, "watched");
+              showToast(`Moved to ${categoryLabels.watched}.`);
+            }
+          }
 
           setSavePromptOpen(false);
           setSavePromptCategory(null);
@@ -459,18 +548,18 @@ export default function LibraryPage() {
       />
 
       {toast ? (
-        <div className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900">
+        <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-mn-border bg-mn-modal px-4 py-2 text-sm text-mn-fg shadow-[var(--mn-shadow-soft)]">
           {toast}
         </div>
       ) : null}
 
       {undoMessage ? (
-        <div className="fixed bottom-5 left-1/2 z-[65] -translate-x-1/2 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900">
+        <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-[65] -translate-x-1/2 rounded-xl border border-mn-border bg-mn-modal px-4 py-2 text-sm text-mn-fg shadow-[var(--mn-shadow-soft)]">
           <span>{undoMessage}</span>
           <button
             type="button"
             onClick={undoDelete}
-            className="ml-3 inline-flex rounded-lg bg-white/15 px-2 py-1 text-xs font-semibold text-white hover:bg-white/25 dark:bg-zinc-900/10 dark:text-zinc-900 dark:hover:bg-zinc-900/20"
+            className="ml-3 inline-flex rounded-lg bg-mn-accent/20 px-2 py-1 text-xs font-semibold text-mn-accent hover:bg-mn-accent/30"
           >
             Undo
           </button>

@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createMiscLibraryItem } from "../lib/movieLibrary";
 import { useMovieLibrary } from "../hooks/useMovieLibrary";
 import type { MovieNightUser } from "../lib/auth";
+import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 
 function normalizePastedUrl(raw: string): string | null {
   const t = raw.trim();
@@ -25,6 +26,7 @@ export default function AddMiscModal({
   user: MovieNightUser;
   onClose: () => void;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const { saveMovie, hydrated } = useMovieLibrary();
   const [miscUrl, setMiscUrl] = useState("");
   const [miscTitle, setMiscTitle] = useState("");
@@ -32,15 +34,19 @@ export default function AddMiscModal({
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
+  useModalFocusTrap(true, panelRef);
+
   useEffect(() => {
-    setMounted(true);
+    queueMicrotask(() => setMounted(true));
   }, []);
 
   useEffect(() => {
-    setMiscUrl("");
-    setMiscTitle("");
-    setRecommendedByInput(user.name?.trim() ?? "");
-    setError(null);
+    queueMicrotask(() => {
+      setMiscUrl("");
+      setMiscTitle("");
+      setRecommendedByInput(user.name?.trim() ?? "");
+      setError(null);
+    });
   }, [user.name]);
 
   useEffect(() => {
@@ -85,78 +91,84 @@ export default function AddMiscModal({
     onClose();
   }
 
+  const inputClass =
+    "mt-1 w-full rounded-xl border border-mn-border bg-mn-input px-3 py-2 text-sm text-mn-fg placeholder:text-mn-fg-soft outline-none transition focus:border-mn-border-strong focus:ring-2 focus:ring-mn-focus/30";
+
   const modal = (
     <div
-      className="fixed inset-0 z-[9999] overflow-y-auto overflow-x-hidden"
+      className="fixed inset-0 z-[9999] flex items-end justify-center p-0 sm:items-center sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="add-misc-title"
     >
       <button
         type="button"
-        className="fixed inset-0 z-0 bg-black/70 backdrop-blur-[2px]"
+        className="absolute inset-0 z-0 bg-black/60 mn-modal-backdrop-animate backdrop-blur-[2px]"
         onClick={onClose}
         aria-label="Close dialog"
       />
 
-      <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-3 sm:p-6">
-        <div className="w-full max-w-lg rounded-2xl border border-zinc-200/80 bg-white p-5 text-zinc-900 shadow-2xl dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50">
-          <div className="flex items-start justify-between gap-3 border-b border-zinc-200 pb-3 dark:border-zinc-800">
-          <div>
+      <div
+        ref={panelRef}
+        className="mn-modal-shell relative z-10 m-0 flex max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-bottom)-1rem))] w-full max-w-[100vw] flex-col overflow-hidden rounded-t-[var(--mn-radius-lg)] border border-mn-border bg-mn-modal p-0 text-mn-fg shadow-[var(--mn-shadow-soft)] sm:max-h-[95vh] sm:max-w-lg sm:rounded-[var(--mn-radius-lg)]"
+      >
+        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-mn-border-strong sm:hidden" />
+
+        <div className="flex items-start justify-between gap-3 border-b border-mn-border p-5">
+          <div className="min-w-0">
             <h2 id="add-misc-title" className="text-lg font-semibold">
               Add misc link
             </h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-mn-fg-muted">
               YouTube, TikTok, Reels, or any URL — saves to your Misc watchlist.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[44px] shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            className="mn-btn-press min-h-[44px] shrink-0 rounded-xl border border-mn-border bg-mn-input px-3 py-2 text-sm text-mn-fg hover:bg-mn-card-elev"
           >
             Close
           </button>
-          </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
+        <form
+          onSubmit={handleSubmit}
+          className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-5 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        >
           <label className="block text-sm">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              URL
-            </span>
+            <span className="text-xs font-medium text-mn-fg-muted">URL</span>
             <input
               value={miscUrl}
               onChange={(e) => setMiscUrl(e.target.value)}
               placeholder="https://..."
-              className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className={inputClass}
               autoComplete="off"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              Title
-            </span>
+            <span className="text-xs font-medium text-mn-fg-muted">Title</span>
             <input
               value={miscTitle}
               onChange={(e) => setMiscTitle(e.target.value)}
               placeholder="Short label"
-              className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className={inputClass}
             />
           </label>
           <label className="block text-sm">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <span className="text-xs font-medium text-mn-fg-muted">
               Recommended by
             </span>
             <input
               value={recommendedByInput}
               onChange={(e) => setRecommendedByInput(e.target.value)}
               placeholder="Alex"
-              className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className={inputClass}
             />
           </label>
 
           {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50/80 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            <div className="rounded-xl border border-mn-danger/40 bg-mn-danger/10 px-3 py-2 text-sm text-mn-danger">
               {error}
             </div>
           ) : null}
@@ -165,20 +177,19 @@ export default function AddMiscModal({
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[44px] rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium dark:border-zinc-700 dark:bg-zinc-900"
+              className="mn-btn-press min-h-[44px] rounded-xl border border-mn-border bg-mn-input px-4 py-2 text-sm font-medium text-mn-fg hover:bg-mn-card-elev"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!hydrated}
-              className="min-h-[44px] rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-black"
+              className="mn-btn-press min-h-[44px] rounded-xl bg-mn-accent px-4 py-2 text-sm font-medium text-mn-bg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Add
             </button>
           </div>
-          </form>
-        </div>
+        </form>
       </div>
     </div>
   );
