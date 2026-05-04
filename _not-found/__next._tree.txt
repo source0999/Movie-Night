@@ -1,2 +1,3 @@
-:HL["/Movie-Night/_next/static/chunks/033lyv1kddyg1.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"/_not-found","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"2cqvXcRoSyQtQ85lYPK60"}
+:HL["/Movie-Night/_next/static/chunks/07860189rue4o.css","style"]
+:HL["/Movie-Night/_next/static/chunks/0ata2rc363jgt.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"/_not-found","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"aNwBMe2SNFvHW1bDDj76J"}

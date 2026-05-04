@@ -1,5 +1,5 @@
 1:"$Sreact.fragment"
 2:"$Sreact.suspense"
-3:I[39756,["/Movie-Night/_next/static/chunks/0-p2.5c28c6tm.js","/Movie-Night/_next/static/chunks/06o2q5pf8x_wn.js","/Movie-Night/_next/static/chunks/0d3shmwh5_nmn.js"],"default"]
-4:I[37457,["/Movie-Night/_next/static/chunks/0-p2.5c28c6tm.js","/Movie-Night/_next/static/chunks/06o2q5pf8x_wn.js","/Movie-Night/_next/static/chunks/0d3shmwh5_nmn.js"],"default"]
-0:{"rsc":["$","$1","c",{"children":[null,["$","$2",null,{"fallback":["$","div",null,{"className":"min-h-screen bg-zinc-50 dark:bg-black"}],"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}]}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"2cqvXcRoSyQtQ85lYPK60"}
+3:I[39756,["/Movie-Night/_next/static/chunks/0enl588woru00.js","/Movie-Night/_next/static/chunks/03fde8~wib~3i.js","/Movie-Night/_next/static/chunks/0_879ixarc_93.js"],"default"]
+4:I[37457,["/Movie-Night/_next/static/chunks/0enl588woru00.js","/Movie-Night/_next/static/chunks/03fde8~wib~3i.js","/Movie-Night/_next/static/chunks/0_879ixarc_93.js"],"default"]
+0:{"rsc":["$","$1","c",{"children":[null,["$","$2",null,{"fallback":["$","div",null,{"className":"min-h-screen bg-zinc-50 dark:bg-black"}],"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}]}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"aNwBMe2SNFvHW1bDDj76J"}
